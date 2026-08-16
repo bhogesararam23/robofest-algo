@@ -158,8 +158,8 @@ LANDING -> DISARMED
 ### 6.2 Human Command Types
 - `NONE`: No command recognized / idle.
 - `START`: Initiate autonomous mission execution from Start Zone.
-- `FORWARD`: Acknowledge safe path and prompt guide drone to advance.
-- `PAUSE`: Temporarily hold guide drone and prompt human to halt.
+- `FORWARD`: Acknowledge safe path and signal guide drone to advance.
+- `PAUSE`: Temporarily hold guide drone and signal human to halt.
 - `SCAN_LEFT`: Instruct guide/scout to verify left margin of corridor.
 - `SCAN_RIGHT`: Instruct guide/scout to verify right margin of corridor.
 - `STOP_ABORT`: Immediate emergency abort / halt human movement.
