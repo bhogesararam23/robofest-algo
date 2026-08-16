@@ -1,0 +1,29 @@
+# PlatformIO build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# C++ build artifacts
+*.exe
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+build/
+bin/
+
+# Python cache & temporary outputs
+__pycache__/
+*.pyc
+*.pyo
+sim_run.json
+sim_report.md
+run_*.json
+run_*.md
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

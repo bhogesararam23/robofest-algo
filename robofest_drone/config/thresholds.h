@@ -1,0 +1,839 @@
+#pragma once
+
+#include <stdint.h>
+
+namespace RobofestDrone {
+namespace Config {
+
+// ============================================================================
+// HSV COLOR RANGE STRUCT
+// ============================================================================
+
+struct HsvColor {
+    uint8_t h = 0;
+    uint8_t s = 0;
+    uint8_t v = 0;
+
+    constexpr HsvColor() : h(0), s(0), v(0) {}
+    constexpr HsvColor(uint8_t _h, uint8_t _s, uint8_t _v) : h(_h), s(_s), v(_v) {}
+};
+
+
+// ============================================================================
+// LOCALIZATION THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr float OPTICAL_FLOW_FOCAL_LENGTH_PX = 400.0f;
+
+// tunable implementation default
+constexpr float TOF_ALTITUDE_FILTER_ALPHA = 0.85f;
+
+// tunable implementation default
+constexpr float FLOW_QUALITY_MIN = 0.30f;
+
+// tunable implementation default
+constexpr float DRIFT_UNCERTAINTY_LIMIT_M = 1.0f;
+
+// tunable implementation default
+constexpr float DRIFT_UNCERTAINTY_RECOVERED_M = 0.60f;
+
+// tunable implementation default
+constexpr float DRIFT_UNCERTAINTY_MAX_M = 5.0f;
+
+// tunable implementation default
+constexpr float MIN_FLOW_ALTITUDE_M = 0.20f;
+
+// tunable implementation default
+constexpr uint32_t MAX_VALID_DT_MS = 200UL;
+
+// tunable implementation default
+constexpr uint32_t TOF_TIMEOUT_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t FLOW_TIMEOUT_MS = 500UL;
+
+// tunable implementation default
+constexpr float ALTITUDE_BIAS_DEFAULT_M = 0.0f;
+
+// tunable implementation default
+constexpr float FLOW_ALIGNMENT_X_DEFAULT = 0.0f;
+
+// tunable implementation default
+constexpr float FLOW_ALIGNMENT_Y_DEFAULT = 0.0f;
+
+// tunable implementation default
+constexpr float MAX_PIXEL_SHIFT_PER_UPDATE_PX = 100.0f;
+
+// tunable implementation default
+constexpr float MAX_TILT_ANGLE_DEG = 12.0f;
+
+// tunable implementation default
+constexpr float DRIFT_GROWTH_RATE_MPS = 0.15f;
+
+// tunable implementation default
+constexpr float DRIFT_RECOVERY_RATE_MPS = 0.05f;
+
+// derived from uploaded logic
+constexpr uint16_t LOCALIZATION_RATE_HZ = 50;
+
+
+// ============================================================================
+// SOFTWARE GEOFENCE THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr float GEOFENCE_NEAR_LIMIT_BAND_M = 0.25f;
+
+// tunable implementation default
+constexpr float GEOFENCE_UNCERTAINTY_MARGIN_SCALE = 1.0f;
+
+// tunable implementation default
+constexpr float GEOFENCE_MAX_UNCERTAINTY_MARGIN_M = 1.5f;
+
+// tunable implementation default
+constexpr float GEOFENCE_MIN_EFFECTIVE_WIDTH_M = 2.0f;
+
+// tunable implementation default
+constexpr float GEOFENCE_MAX_CORRECTION_SPEED_MPS = 1.0f;
+
+// tunable implementation default
+constexpr float GEOFENCE_CORRECTION_GAIN = 0.35f;
+
+// tunable implementation default
+constexpr uint32_t GEOFENCE_STATUS_HYSTERESIS_MS = 200UL;
+
+// tunable implementation default
+constexpr float GEOFENCE_SPEED_REDUCTION_FACTOR_WARNING = 0.75f;
+
+// tunable implementation default
+constexpr float GEOFENCE_SPEED_REDUCTION_FACTOR_NEAR_LIMIT = 0.50f;
+
+// tunable implementation default
+constexpr float GEOFENCE_SPEED_REDUCTION_FACTOR_OUTSIDE = 0.25f;
+
+// tunable implementation default
+constexpr float MAX_HORIZONTAL_SPEED_MPS = 1.5f;
+
+
+// ============================================================================
+// VISION THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr uint16_t VISION_RATE_HZ = 15;
+
+// tunable implementation default
+constexpr uint16_t VISION_PROCESS_WIDTH = 160;
+
+// tunable implementation default
+constexpr uint16_t VISION_PROCESS_HEIGHT = 120;
+
+// tunable implementation default
+constexpr uint8_t VISION_MAX_BLOBS = 16;
+
+// tunable implementation default
+constexpr uint8_t VISION_MAX_CANDIDATES = 16;
+
+// tunable implementation default
+constexpr uint8_t VISION_MAX_PERSISTENCE_TRACKS = 24;
+
+// tunable implementation default
+constexpr uint16_t IMAGE_WIDTH = 320;
+
+// tunable implementation default
+constexpr uint16_t IMAGE_HEIGHT = 240;
+
+// tunable implementation default
+constexpr float H_FOV_DEG = 60.0f;
+
+// tunable implementation default
+constexpr float V_FOV_DEG = 45.0f;
+
+// tunable implementation default
+constexpr float IMAGE_CENTER_X = 160.0f;
+
+// tunable implementation default
+constexpr float IMAGE_CENTER_Y = 120.0f;
+
+// derived from uploaded logic
+constexpr float CIRCULARITY_MIN = 0.70f;
+
+// tunable implementation default
+constexpr float BLOB_AREA_MIN_PX = 25.0f;
+
+// tunable implementation default
+constexpr float BLOB_AREA_MAX_PX = 2500.0f;
+
+// tunable implementation default
+constexpr float CONFIDENCE_REPORT_MIN = 45.0f;
+
+// derived from uploaded logic
+constexpr float PERSISTENCE_RADIUS_M = 0.25f;
+
+// tunable implementation default
+constexpr uint16_t PERSISTENCE_COUNT_MIN = 5;
+
+// tunable implementation default
+constexpr uint32_t PERSISTENCE_TIMEOUT_MS = 1500UL;
+
+// tunable implementation default
+constexpr float MARKER_AREA_NOMINAL_PX = 400.0f;
+
+// tunable implementation default
+constexpr float EDGE_REJECT_MARGIN_PX = 8.0f;
+
+// tunable implementation default
+constexpr bool GLARE_REJECT_ENABLED = true;
+
+// tunable implementation default
+constexpr float GLARE_AREA_MAX_PX = 5000.0f;
+
+// tunable implementation default
+constexpr bool VISION_DOWNSCALE_ENABLED = true;
+
+// tunable implementation default
+constexpr bool VISION_ATTITUDE_COMPENSATION_ENABLED = true;
+
+// tunable implementation default
+constexpr float MIN_PROJECTION_ALTITUDE_M = 0.25f;
+
+
+// ============================================================================
+// MINE MARKER HSV THRESHOLD PLACEHOLDERS
+// ============================================================================
+
+// tunable implementation default
+constexpr HsvColor ON_GROUND_MINE_HSV_LOW = {0, 100, 100};
+
+// tunable implementation default
+constexpr HsvColor ON_GROUND_MINE_HSV_HIGH = {15, 255, 255};
+
+// tunable implementation default
+constexpr HsvColor BURIED_SURFACE_MARKER_HSV_LOW = {25, 120, 120};
+
+// tunable implementation default
+constexpr HsvColor BURIED_SURFACE_MARKER_HSV_HIGH = {40, 255, 255};
+
+
+// ============================================================================
+// MINE MAP THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr float SAME_DRONE_DEDUP_RADIUS_M = 0.30f;
+
+// tunable implementation default
+constexpr float CROSS_DRONE_DEDUP_RADIUS_M = 0.50f;
+
+// tunable implementation default
+constexpr float MINE_CONFIRM_CONFIDENCE_MIN = 70.0f;
+
+// tunable implementation default
+constexpr uint16_t MINE_CONFIRM_PERSISTENCE_MIN = 5;
+
+// tunable implementation default
+constexpr uint32_t MINE_STALE_TIMEOUT_MS = 15000UL;
+
+// tunable implementation default
+constexpr uint32_t CANDIDATE_DECAY_INTERVAL_MS = 1000UL;
+
+// tunable implementation default
+constexpr float CANDIDATE_CONFIDENCE_DECAY_FACTOR = 0.90f;
+
+// tunable implementation default
+constexpr float CANDIDATE_MIN_CONFIDENCE_AFTER_DECAY = 20.0f;
+
+// tunable implementation default
+constexpr float MINE_FUSION_POSITION_GAIN = 0.30f;
+
+// tunable implementation default
+constexpr float MINE_FUSION_CONFIDENCE_GAIN = 0.40f;
+
+// tunable implementation default
+constexpr uint32_t MINE_MAP_VERSION_START = 0;
+
+// tunable implementation default
+constexpr float CLAIM_READY_CONFIDENCE_MIN = 65.0f;
+
+// tunable implementation default
+constexpr uint16_t CLAIM_READY_PERSISTENCE_MIN = 4;
+
+// tunable implementation default
+constexpr uint32_t CLAIM_TIMEOUT_MS = 5000UL;
+
+// tunable implementation default
+constexpr float MINE_MAP_BOUNDARY_MARGIN_M = 1.0f;
+
+// tunable implementation default
+constexpr bool MINE_REJECT_OUTSIDE_FIELD = true;
+
+// tunable implementation default
+constexpr uint32_t MINE_DETECTION_MAX_AGE_MS = 500UL;
+
+
+// ============================================================================
+// PATH PLANNER THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr float PATH_GRID_RESOLUTION_M = 0.5f;
+
+// tunable implementation default
+constexpr uint16_t PATH_MAX_GRID_COLS = 32;
+
+// tunable implementation default
+constexpr uint16_t PATH_MAX_GRID_ROWS = 122;
+
+// tunable implementation default
+constexpr uint16_t PATH_MAX_GRID_CELLS = 3904;
+
+// tunable implementation default
+constexpr uint8_t PATH_MAX_WAYPOINTS = 32;
+
+// tunable implementation default
+constexpr uint16_t PATH_MAX_ASTAR_NODES = 3904;
+
+// tunable implementation default
+constexpr uint8_t PATH_SMOOTHING_ITERATIONS = 2;
+
+// tunable implementation default
+constexpr float PATH_EXACT_CLEARANCE_STEP_M = 0.25f;
+
+// tunable implementation default
+constexpr float PATH_CORRIDOR_WIDTH_M = 1.0f;
+
+// tunable implementation default
+constexpr float PATH_DEVIATION_TOLERANCE_M = 0.75f;
+
+// tunable implementation default
+constexpr uint32_t PATH_REPLAN_COOLDOWN_MS = 2000UL;
+
+// tunable implementation default
+constexpr float PATH_MIN_SEGMENT_LENGTH_M = 0.35f;
+
+// tunable implementation default
+constexpr float PATH_MAX_SEGMENT_LENGTH_M = 3.0f;
+
+// tunable implementation default
+constexpr float PATH_OBSTACLE_INFLATION_RADIUS_M = 0.5f;
+
+// tunable implementation default
+constexpr bool PATH_ALLOW_DIAGONAL_MOVEMENT = true;
+
+// tunable implementation default
+constexpr bool PATH_PREVENT_CORNER_CUTTING = true;
+
+// tunable implementation default
+constexpr float PATH_EDGE_COST_STRAIGHT = 1.0f;
+
+// tunable implementation default
+constexpr float PATH_EDGE_COST_DIAGONAL = 1.41421356f;
+
+// tunable implementation default
+constexpr float PATH_START_ANCHOR_X = 7.5f;
+
+// tunable implementation default
+constexpr float PATH_START_ANCHOR_Y = 0.5f;
+
+// tunable implementation default
+constexpr float PATH_EXIT_ANCHOR_X = 7.5f;
+
+// tunable implementation default
+constexpr float PATH_EXIT_ANCHOR_Y = 59.5f;
+
+// tunable implementation default
+constexpr bool PATH_REQUIRE_MINE_OBSERVATION_BEFORE_GUIDING = true;
+
+
+// ============================================================================
+// COMMAND RECOGNITION THRESHOLDS
+// ============================================================================
+
+// official or derived challenge constants
+constexpr bool COMMAND_START_REQUIRED = true;
+constexpr bool COMMAND_FORWARD_SUPPORTED = true;
+constexpr bool COMMAND_PAUSE_SUPPORTED = true;
+constexpr bool COMMAND_SCAN_LEFT_SUPPORTED = true;
+constexpr bool COMMAND_SCAN_RIGHT_SUPPORTED = true;
+constexpr bool COMMAND_STOP_ABORT_SUPPORTED = true;
+
+// tunable implementation default
+constexpr float START_CONFIDENCE_MIN = 0.70f;
+
+// tunable implementation default
+constexpr float FORWARD_CONFIDENCE_MIN = 0.60f;
+
+// tunable implementation default
+constexpr float PAUSE_CONFIDENCE_MIN = 0.80f;
+
+// tunable implementation default
+constexpr float SCAN_CONFIDENCE_MIN = 0.60f;
+
+// tunable implementation default
+constexpr float STOP_CONFIDENCE_MIN = 0.90f;
+
+// tunable implementation default
+constexpr uint8_t COMMAND_HYSTERESIS_FRAMES = 3;
+
+// tunable implementation default
+constexpr uint32_t COMMAND_DEBOUNCE_MS = 300UL;
+
+// tunable implementation default
+constexpr uint32_t COMMAND_LOCKOUT_MS = 1500UL;
+
+// tunable implementation default
+constexpr uint32_t STOP_COMMAND_LOCKOUT_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint32_t COMMAND_VALID_WINDOW_MS = 1000UL;
+
+// tunable implementation default
+constexpr float COMMAND_SOURCE_CONFLICT_MARGIN = 0.15f;
+
+// tunable implementation default
+constexpr float COMMAND_FUSION_BONUS = 0.10f;
+
+// tunable implementation default
+constexpr uint32_t COMMAND_STALE_SAMPLE_TIMEOUT_MS = 300UL;
+
+// tunable implementation default
+constexpr uint32_t SCAN_COMMAND_ACTIVE_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint32_t COMMAND_NONE_GRACE_MS = 100UL;
+
+// tunable implementation default
+constexpr bool GESTURE_ENABLED_DEFAULT = true;
+
+// tunable implementation default
+constexpr bool VOICE_ENABLED_DEFAULT = false;
+
+// tunable implementation default
+constexpr bool DEBUG_COMMANDS_ENABLED_DEFAULT = false;
+
+// tunable implementation default
+constexpr bool START_ALLOW_ONLY_BEFORE_TAKEOFF = true;
+
+// tunable implementation default
+constexpr bool PAUSE_ALLOW_DURING_FLIGHT_ONLY = true;
+
+// tunable implementation default
+constexpr bool STOP_ALLOW_ALWAYS = true;
+
+// tunable implementation default
+constexpr bool STOP_REQUIRE_DOUBLE_CONFIRM = false;
+
+// tunable implementation default
+constexpr uint32_t STOP_DOUBLE_CONFIRM_WINDOW_MS = 3000UL;
+
+
+// ============================================================================
+// HUMAN TRACKING THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr uint8_t HUMAN_TRACK_RATE_HZ = 20;
+
+// tunable implementation default
+constexpr float HUMAN_MIN_DETECTION_CONFIDENCE = 0.55f;
+
+// tunable implementation default
+constexpr float HUMAN_TRACK_CONFIDENCE_MIN = 0.60f;
+
+// tunable implementation default
+constexpr float HUMAN_TRACK_ALPHA = 0.35f;
+
+// tunable implementation default
+constexpr float HUMAN_VELOCITY_ALPHA = 0.25f;
+
+// tunable implementation default
+constexpr uint32_t HUMAN_LOST_TIMEOUT_MS = 1500UL;
+
+// tunable implementation default
+constexpr float HUMAN_OFF_PATH_DISTANCE_M = 0.75f;
+
+// tunable implementation default
+constexpr uint32_t HUMAN_OFF_PATH_DEBOUNCE_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t HUMAN_RECOVERY_TIMEOUT_MS = 3000UL;
+
+// tunable implementation default
+constexpr uint32_t HUMAN_EXIT_CONFIRM_TIMEOUT_MS = 2000UL;
+
+// tunable implementation default
+constexpr float HUMAN_MAX_PLAUSIBLE_SPEED_MPS = 2.5f;
+
+// tunable implementation default
+constexpr float HUMAN_PROXIMITY_WARNING_M = 1.0f;
+
+// tunable implementation default
+constexpr float HUMAN_PROXIMITY_CRITICAL_M = 0.5f;
+
+// tunable implementation default
+constexpr float HUMAN_EXIT_ZONE_MARGIN_M = 0.10f;
+
+// tunable implementation default
+constexpr bool HUMAN_USE_FOOT_POINT = true;
+
+// tunable implementation default
+constexpr float HUMAN_PIXEL_NOISE_LIMIT_PX = 80.0f;
+
+// ============================================================================
+// SWARM COMMUNICATION THRESHOLDS
+// ============================================================================
+
+// official or derived swarm requirements
+constexpr uint8_t MIN_SWARM_DRONES = 3;
+constexpr uint8_t MAX_SWARM_DRONES = 4;
+
+// tunable implementation default
+constexpr uint32_t PEER_DEGRADED_TIMEOUT_MS = 1000UL;
+
+// tunable implementation default
+constexpr uint32_t CLAIM_SUPPRESSION_MS = 8000UL;
+
+// tunable implementation default
+constexpr uint32_t MINE_UPDATE_PERIOD_MS = 1000UL;
+
+// tunable implementation default
+constexpr uint32_t PERSON_UPDATE_PERIOD_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t PATH_UPDATE_PERIOD_MS = 1000UL;
+
+// tunable implementation default
+constexpr uint32_t ROLE_REASSIGN_TIMEOUT_MS = 3000UL;
+
+// tunable implementation default
+constexpr uint8_t RADIO_TX_RETRY_LIMIT = 2;
+
+// tunable implementation default
+constexpr uint8_t PATH_UPDATE_CHUNK_MAX_WAYPOINTS = 4;
+
+// tunable implementation default
+constexpr float CLAIM_STRENGTH_MARGIN = 5.0f;
+
+// tunable implementation default
+constexpr float MINE_HASH_GRID_RESOLUTION_M = 0.10f;
+
+// tunable implementation default
+constexpr uint32_t SWARM_STALE_TIMESTAMP_TOLERANCE_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint8_t LANE_NONE = 0;
+constexpr uint8_t LANE_LEFT = 1;
+constexpr uint8_t LANE_RIGHT = 2;
+constexpr uint8_t LANE_CENTER = 3;
+
+// ============================================================================
+// SAFETY MANAGER THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr float BATTERY_HYSTERESIS_VOLTAGE = 0.10f;
+
+// tunable implementation default
+constexpr uint32_t BATTERY_FAULT_DEBOUNCE_MS = 1000UL;
+
+// tunable implementation default
+constexpr uint32_t FC_LINK_LOST_LAND_MS = 2000UL;
+
+// tunable implementation default
+constexpr uint32_t FC_LINK_LOST_EMERGENCY_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint32_t CAMERA_STALL_HOLD_MS = 2000UL;
+
+// tunable implementation default
+constexpr uint32_t CAMERA_STALL_LAND_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint32_t RADIO_TIMEOUT_HOLD_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint32_t SWARM_CRITICAL_HOLD_MS = 5000UL;
+
+// tunable implementation default
+constexpr float LOCALIZATION_DEGRADED_UNCERTAINTY_M = 0.75f;
+
+// tunable implementation default
+constexpr float LOCALIZATION_UNRECOVERABLE_UNCERTAINTY_M = 1.0f;
+
+// tunable implementation default
+constexpr uint32_t LOCALIZATION_FAULT_DEBOUNCE_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t GEOFENCE_OUTSIDE_DEBOUNCE_MS = 200UL;
+
+// tunable implementation default
+constexpr bool GEOFENCE_WARNING_HOLD_ENABLED = false;
+
+// tunable implementation default
+constexpr bool GEOFENCE_OUTSIDE_LAND_ENABLED = true;
+
+// tunable implementation default
+constexpr float COLLISION_RISK_PEER_DISTANCE_M = 1.5f;
+
+// tunable implementation default
+constexpr float COLLISION_RISK_PEER_DISTANCE_CRITICAL_M = 0.75f;
+
+// tunable implementation default
+constexpr float UNSAFE_PROXIMITY_HUMAN_DISTANCE_M = 1.0f;
+
+// tunable implementation default
+constexpr float UNSAFE_PROXIMITY_HUMAN_CRITICAL_M = 0.5f;
+
+// tunable implementation default
+constexpr uint32_t PROXIMITY_FAULT_DEBOUNCE_MS = 300UL;
+
+// tunable implementation default
+constexpr float SURFACE_CONTACT_ALTITUDE_M = 0.12f;
+
+// tunable implementation default
+constexpr uint32_t SURFACE_CONTACT_DEBOUNCE_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t WATCHDOG_MODULE_UPDATE_TIMEOUT_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t SAFETY_FAULT_CLEAR_HYSTERESIS_MS = 1000UL;
+
+// tunable implementation default
+constexpr bool EMERGENCY_LATCH_UNTIL_RESET = true;
+
+// ============================================================================
+// FLIGHT CONTROLLER BRIDGE THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr uint32_t FC_UART_BAUDRATE = 115200;
+
+// tunable implementation default
+constexpr uint8_t FC_PROTOCOL_VERSION = 1;
+
+// tunable implementation default
+constexpr uint8_t FC_PACKET_START_BYTE = 0xAA;
+
+// tunable implementation default
+constexpr uint32_t FC_HEARTBEAT_PERIOD_MS = 100UL;
+
+// tunable implementation default
+constexpr uint32_t FC_STATUS_TIMEOUT_MS = 500UL;
+
+// tunable implementation default
+constexpr uint32_t FC_COMMAND_TIMEOUT_MS = 200UL;
+
+// tunable implementation default
+constexpr uint8_t FC_TX_RETRY_LIMIT = 2;
+
+// tunable implementation default
+constexpr uint16_t FC_RX_BUFFER_SIZE = 128;
+
+// tunable implementation default
+constexpr uint16_t FC_TX_BUFFER_SIZE = 64;
+
+// tunable implementation default
+constexpr float FC_MAX_HORIZONTAL_SPEED_MPS = 1.5f;
+
+// tunable implementation default
+constexpr float FC_MAX_VERTICAL_SPEED_MPS = 0.8f;
+
+// tunable implementation default
+constexpr float FC_MIN_ALTITUDE_M = 0.0f;
+
+// tunable implementation default
+constexpr float FC_MAX_ALTITUDE_M = 3.0f;
+
+// tunable implementation default
+constexpr float FC_MAX_HEADING_RATE_DEG_S = 90.0f;
+
+// tunable implementation default
+constexpr uint32_t FC_TAKEOFF_TIMEOUT_MS = 20000UL;
+
+// tunable implementation default
+constexpr uint32_t FC_LANDING_TIMEOUT_MS = 30000UL;
+
+// tunable implementation default
+constexpr uint32_t FC_EMERGENCY_STOP_REPEAT_MS = 100UL;
+
+// tunable implementation default
+constexpr bool FC_AUTO_HOLD_ON_COMMAND_TIMEOUT = true;
+
+// tunable implementation default
+constexpr bool FC_AUTO_LAND_ON_LINK_LOST = false;
+
+// tunable implementation default
+constexpr float ARM_MAGIC_NUMBER = 41234.0f; // 0xA112
+
+// tunable implementation default
+constexpr float DISARM_MAGIC_NUMBER = 53594.0f; // 0xD15A
+
+// tunable implementation default
+constexpr float EMERGENCY_MAGIC_NUMBER = 58736.0f; // 0xE570
+
+// ============================================================================
+// MARKER CONTROLLER THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr bool MARKER_OUTPUT_ENABLED_DEFAULT = true;
+
+// tunable implementation default
+constexpr uint8_t MARKER_BRIGHTNESS_DEFAULT_PERCENT = 80;
+
+// tunable implementation default
+constexpr uint32_t MARKER_GUIDANCE_UPDATE_MS = 50UL;
+
+// tunable implementation default
+constexpr uint32_t MARKER_PATTERN_MIN_HOLD_MS = 200UL;
+
+// tunable implementation default
+constexpr uint32_t MARKER_BLINK_PERIOD_MS = 300UL;
+
+// tunable implementation default
+constexpr uint32_t MARKER_EMERGENCY_BLINK_PERIOD_MS = 100UL;
+
+// tunable implementation default
+constexpr uint32_t MARKER_CAUTION_BLINK_PERIOD_MS = 500UL;
+
+// tunable implementation default
+constexpr bool MARKER_USE_LIGHT_CUES = true;
+
+// tunable implementation default
+constexpr bool MARKER_ALLOW_PROJECTED_CUES = false;
+
+// tunable implementation default
+constexpr bool MARKER_PHYSICAL_MECHANISM_ENABLED = false;
+
+// ============================================================================
+// SEARCH BEHAVIOR THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr bool SEARCH_ACTIVE_ENABLED_DEFAULT = false;
+
+// tunable implementation default
+constexpr float SEARCH_FORWARD_SPEED_MPS = 0.6f;
+
+// tunable implementation default
+constexpr float SEARCH_MAX_SPEED_MPS = 1.0f;
+
+// tunable implementation default
+constexpr float SEARCH_MIN_SPEED_MPS = 0.05f;
+
+// tunable implementation default
+constexpr float SEARCH_LANE_LEFT_CENTER_X = 3.5f;
+
+// tunable implementation default
+constexpr float SEARCH_LANE_RIGHT_CENTER_X = 11.5f;
+
+// tunable implementation default
+constexpr float SEARCH_LANE_CENTER_CENTER_X = 7.5f;
+
+// tunable implementation default
+constexpr float SEARCH_RESERVE_HOLD_X = 7.5f;
+
+// tunable implementation default
+constexpr float SEARCH_RESERVE_HOLD_Y = 2.0f;
+
+// tunable implementation default
+constexpr float SEARCH_LANE_HOLD_GAIN = 0.35f;
+
+// tunable implementation default
+constexpr float SEARCH_Y_LOOKAHEAD_M = 1.5f;
+
+// tunable implementation default
+constexpr float SEARCH_Y_HOLD_GAIN = 0.25f;
+
+// tunable implementation default
+constexpr float SEARCH_SCAN_BIAS_SPEED_MPS = 0.30f;
+
+// tunable implementation default
+constexpr uint32_t SEARCH_SCAN_COMMAND_TIMEOUT_MS = 5000UL;
+
+// tunable implementation default
+constexpr float SEARCH_TURNAROUND_MARGIN_M = 1.0f;
+
+// tunable implementation default
+constexpr float SEARCH_LANE_SHIFT_M = 1.0f;
+
+// tunable implementation default
+constexpr bool SEARCH_SERPENTINE_ENABLED = true;
+
+// tunable implementation default
+constexpr float SEARCH_COVERAGE_GRID_RESOLUTION_M = 0.5f;
+
+// tunable implementation default
+constexpr uint16_t SEARCH_COVERAGE_GRID_COLS = 30;
+
+// tunable implementation default
+constexpr uint16_t SEARCH_COVERAGE_GRID_ROWS = 116;
+
+// tunable implementation default
+constexpr float SEARCH_SENSOR_FOOTPRINT_RADIUS_M = 1.0f;
+
+// tunable implementation default
+constexpr float SEARCH_COVERAGE_SUFFICIENT_PERCENT = 75.0f;
+
+// tunable implementation default
+constexpr uint32_t SEARCH_COVERAGE_UPDATE_MS = 100UL;
+
+// tunable implementation default
+constexpr float SEARCH_PEER_SEPARATION_M = 2.0f;
+
+// tunable implementation default
+constexpr float SEARCH_PEER_CRITICAL_SEPARATION_M = 1.0f;
+
+// tunable implementation default
+constexpr float SEARCH_PEER_AVOID_GAIN = 0.4f;
+
+// tunable implementation default
+constexpr float SEARCH_GEOFENCE_CORRECTION_GAIN = 0.5f;
+
+// tunable implementation default
+constexpr float SEARCH_MAX_GEOFENCE_CORRECTION_MPS = 0.6f;
+
+// tunable implementation default
+constexpr uint32_t SEARCH_UNSCANNED_CELL_SEARCH_TIMEOUT_MS = 10000UL;
+
+// tunable implementation default
+constexpr uint32_t SEARCH_HOLD_AFTER_COMPLETE_MS = 2000UL;
+
+// ============================================================================
+// TELEMETRY & STORAGE THRESHOLDS
+// ============================================================================
+
+// tunable implementation default
+constexpr uint16_t MAX_TELEMETRY_EVENTS = 128;
+
+// tunable implementation default
+constexpr uint16_t TELEMETRY_MAX_EVENTS_PER_SECOND = 50;
+
+// tunable implementation default
+constexpr bool TELEMETRY_PERSIST_CRITICAL_EVENTS = true;
+
+// tunable implementation default
+constexpr bool TELEMETRY_PERSIST_PERIODIC_SUMMARY = false;
+
+// tunable implementation default
+constexpr uint8_t TELEMETRY_MIN_LOG_PRIORITY = 1; // TELEMETRY_SEVERITY_INFO
+
+// tunable implementation default
+constexpr uint32_t TELEMETRY_DRIFT_LOG_INTERVAL_MS = 2000UL;
+
+// tunable implementation default
+constexpr uint32_t TELEMETRY_SUMMARY_LOG_INTERVAL_MS = 5000UL;
+
+// tunable implementation default
+constexpr uint32_t TELEMETRY_STORAGE_RETRY_MS = 3000UL;
+
+// tunable implementation default
+constexpr bool TELEMETRY_FLUSH_BEFORE_LANDING = true;
+
+// tunable implementation default
+constexpr uint16_t TELEMETRY_CRITICAL_QUEUE_SIZE = 16;
+
+} // namespace Config
+} // namespace RobofestDrone
