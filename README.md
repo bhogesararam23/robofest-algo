@@ -136,10 +136,3 @@ python sim/sitl_harness.py --seed 42 --scenario dense_map --drones 4 --mines 60 
 # Evaluate score from a run file
 python sim/score_eval.py run_nominal.json --report run_nominal_score.md
 ```
-
-## Pre-Flight Safety Rules
-
-- Remove all propellers during bench testing, firmware flashing, and sensor calibration.
-- Verify the physical hardware kill switch operates correctly before arming.
-- Check battery voltage is at or above 14.8V before takeoff.
-- Ensure optical flow and camera lenses are clean and unobstructed.
