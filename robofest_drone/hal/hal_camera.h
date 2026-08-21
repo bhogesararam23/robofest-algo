@@ -45,6 +45,7 @@ bool hal_camera_is_healthy();
 bool hal_camera_get_frame(CameraFrame& frame);
 bool hal_camera_read_frame();
 uint32_t hal_camera_get_last_frame_time_ms();
+bool hal_camera_is_stub(); // Runtime marker: true for stub, false for real camera
 
 } // namespace Hal
 } // namespace RobofestDrone

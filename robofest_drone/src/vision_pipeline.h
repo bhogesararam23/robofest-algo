@@ -112,10 +112,9 @@ public:
 
 private:
     void initProfiles();
-    bool processFrame(const Hal::CameraFrame& frame, const Types::Pose2D& drone_pose, float fused_altitude_m, const Types::AttitudeSample& attitude, uint32_t now_ms);
     void segmentHsvMask(const Hal::CameraFrame& frame, const VisionMarkerProfile& profile);
     uint8_t extractBlobs(const VisionMarkerProfile& profile);
-    void projectToWorld(float pixel_x, float pixel_y, float altitude_m, const Types::Pose2D& drone_pose, const Types::AttitudeSample& attitude, float& out_world_x, float& out_world_y);
+    void projectToWorld(float pixel_x, float pixel_y, float altitude_m, const Types::Pose2D& drone_pose, const Types::AttitudeSample& attitude, float& out_world_x, float& out_world_y, bool& out_valid);
     void updatePersistenceTracks(const VisionBlob* blobs, uint8_t blob_count, const Types::Pose2D& drone_pose, float fused_altitude_m, const Types::AttitudeSample& attitude, uint32_t now_ms);
     void setTelemetryEvent(uint16_t event_id);
 

@@ -6,6 +6,7 @@ namespace Hal {
 
 namespace {
     static bool s_camera_initialized = false;
+    static bool s_stub_mode = true; // True for stub; real driver should set false
     static uint32_t s_last_frame_ms = 0;
 }
 
@@ -15,6 +16,7 @@ namespace {
 
 bool hal_camera_init() {
     s_camera_initialized = true;
+    s_stub_mode = true; // Stub mode by default; real driver should set false
     s_last_frame_ms = hal_millis();
     hal_log("[HAL_CAMERA] Camera stub initialized (safe default).");
     return true;
@@ -51,6 +53,10 @@ bool hal_camera_get_frame(CameraFrame& frame) {
 
 bool hal_camera_is_healthy() {
     return s_camera_initialized;
+}
+
+bool hal_camera_is_stub() {
+    return s_stub_mode;
 }
 
 uint32_t hal_camera_get_last_frame_time_ms() {

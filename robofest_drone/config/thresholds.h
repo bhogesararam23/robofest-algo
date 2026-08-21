@@ -121,7 +121,14 @@ constexpr float MAX_HORIZONTAL_SPEED_MPS = 1.5f;
 // ============================================================================
 
 // tunable implementation default
-constexpr uint16_t VISION_RATE_HZ = 15;
+ constexpr uint16_t VISION_RATE_HZ = 15;
+
+// tunable implementation default
+ constexpr bool RGB565_LE_BYTE_ORDER = true; // true = LSB first (this code's assumption), false = MSB first
+ // TODO: Verify empirically with camera module - test with pure red, green, blue targets
+ // and confirm computed hue values match expectations before trusting HSV thresholds.
+
+// tunable implementation default
 
 // tunable implementation default
 constexpr uint16_t VISION_PROCESS_WIDTH = 160;

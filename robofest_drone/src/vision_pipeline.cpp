@@ -14,8 +14,8 @@ namespace {
 
     // Static buffers to prevent any heap allocation on the embedded vision update path
     static uint8_t s_binary_mask[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
-    static uint16_t s_bfs_x[1024];
-    static uint16_t s_bfs_y[1024];
+    static uint16_t s_bfs_x[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
+    static uint16_t s_bfs_y[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
     static VisionBlob s_extracted_blobs[Config::VISION_MAX_BLOBS];
 }
 
@@ -31,6 +31,10 @@ void VisionPipeline::init() {
     reset();
     Hal::hal_camera_init();
     camera_healthy_ = Hal::hal_camera_is_healthy();
+    if (Hal::hal_camera_is_stub()) {
+        setTelemetryEvent(TE_VISION_MASK_EMPTY); // Distinct event: using stub camera, no real data
+        hal_log("[VISION] Using stub camera - no real image data being processed.");
+    }
 }
 
 void VisionPipeline::reset() {
@@ -132,6 +136,9 @@ bool VisionPipeline::isFrameFresh(uint32_t now_ms) const {
 }
 
 Types::VisionCandidate VisionPipeline::getCandidate(uint8_t index) const {
+    if (!camera_healthy_) {
+        return Types::VisionCandidate();
+    }
     if (index < candidate_count_) {
         return candidates_[index];
     }
@@ -148,6 +155,15 @@ void VisionPipeline::segmentHsvMask(const Hal::CameraFrame& frame, const VisionM
 
     if (frame.data == nullptr || frame.width == 0 || frame.height == 0) {
         setTelemetryEvent(TE_VISION_MASK_EMPTY);
+        return;
+    }
+
+    // Check pixel format once upfront - bail with distinct telemetry if unsupported,
+    // rather than discovering it one pixel at a time and producing an empty mask
+    // indistinguishable from "no markers visible."
+    if (frame.format != Hal::PixelFormat::PIXEL_FORMAT_RGB565 &&
+        frame.format != Hal::PixelFormat::PIXEL_FORMAT_RGB888) {
+        setTelemetryEvent(TE_VISION_UNSUPPORTED_PIXEL_FORMAT);
         return;
     }
 
@@ -168,7 +184,10 @@ void VisionPipeline::segmentHsvMask(const Hal::CameraFrame& frame, const VisionM
 
             if (frame.format == Hal::PixelFormat::PIXEL_FORMAT_RGB565) {
                 uint32_t pixel_idx = (src_y * frame.width + src_x) * 2;
-                uint16_t raw_pixel = frame.data[pixel_idx] | (frame.data[pixel_idx + 1] << 8);
+                uint16_t raw_pixel =
+                    Config::RGB565_LE_BYTE_ORDER
+                        ? (frame.data[pixel_idx] | (frame.data[pixel_idx + 1] << 8))
+                        : (frame.data[pixel_idx + 1] | (frame.data[pixel_idx] << 8));
                 r = ((raw_pixel >> 11) & 0x1F) << 3;
                 g = ((raw_pixel >> 5) & 0x3F) << 2;
                 b = (raw_pixel & 0x1F) << 3;
@@ -250,7 +269,7 @@ uint8_t VisionPipeline::extractBlobs(const VisionMarkerProfile& profile) {
                 uint16_t min_y = y, max_y = y;
                 uint32_t perimeter = 0;
 
-                while (q_head < q_tail && q_tail < 1024) {
+while (q_head < q_tail && q_tail < Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT) {
                     uint16_t cx = s_bfs_x[q_head];
                     uint16_t cy = s_bfs_y[q_head];
                     q_head++;
@@ -280,12 +299,25 @@ uint8_t VisionPipeline::extractBlobs(const VisionMarkerProfile& profile) {
                             uint32_t n_idx = static_cast<uint32_t>(ny * Config::VISION_PROCESS_WIDTH + nx);
                             if (s_binary_mask[n_idx] == 0) {
                                 is_border_pixel = true;
-                            } else if (s_binary_mask[n_idx] == 1 && q_tail < 1024) {
+                            } else if (s_binary_mask[n_idx] == 1 && q_tail < Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT) {
                                 s_binary_mask[n_idx] = 2; // Mark queued
                                 s_bfs_x[q_tail] = static_cast<uint16_t>(nx);
                                 s_bfs_y[q_tail] = static_cast<uint16_t>(ny);
                                 q_tail++;
                             }
+                        }
+                    }
+
+                    if (is_border_pixel) {
+                        perimeter++;
+                    }
+                }
+
+                // Check if BFS overflowed the scan buffer
+                if (q_tail >= Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT) {
+                    setTelemetryEvent(TE_VISION_BLOB_EXCEEDED_SCAN_BUFFER);
+                    continue; // Discard this entire blob - don't measure/score partial region
+                }
                         }
                     }
 
@@ -307,7 +339,15 @@ uint8_t VisionPipeline::extractBlobs(const VisionMarkerProfile& profile) {
                 if (circularity > 1.0f) circularity = 1.0f;
                 if (circularity < 0.0f) circularity = 0.0f;
 
-                // Blob Filtering Stage
+                // Glare rejection: distinct tighter check that runs before general area check.
+                // Catches extremely large areas from lens flare/specular reflection (> 5000 px)
+                // that would otherwise pass the normal area filter. Glare threshold is set above
+                // the normal marker area max (2500 px) so it only triggers for abnormally large regions.
+                if (Config::GLARE_REJECT_ENABLED && full_area > Config::GLARE_AREA_MAX_PX) {
+                    setTelemetryEvent(TE_VISION_BLOB_REJECTED_GLARE);
+                    continue;
+                }
+
                 if (full_area < profile.min_area_px || full_area > profile.max_area_px) {
                     setTelemetryEvent(TE_VISION_BLOB_REJECTED_AREA);
                     continue;
@@ -328,11 +368,6 @@ uint8_t VisionPipeline::extractBlobs(const VisionMarkerProfile& profile) {
                     full_min_y <= Config::EDGE_REJECT_MARGIN_PX ||
                     full_max_y >= (Config::IMAGE_HEIGHT - Config::EDGE_REJECT_MARGIN_PX)) {
                     setTelemetryEvent(TE_VISION_BLOB_REJECTED_EDGE);
-                    continue;
-                }
-
-                if (Config::GLARE_REJECT_ENABLED && full_area > Config::GLARE_AREA_MAX_PX) {
-                    setTelemetryEvent(TE_VISION_BLOB_REJECTED_GLARE);
                     continue;
                 }
 
@@ -367,10 +402,14 @@ void VisionPipeline::projectToWorld(
     const Types::Pose2D& drone_pose,
     const Types::AttitudeSample& attitude,
     float& out_world_x,
-    float& out_world_y
+    float& out_world_y,
+    bool& out_valid
 ) {
+    out_valid = true;  // assume valid unless we detect an issue
+
     if (altitude_m < Config::MIN_PROJECTION_ALTITUDE_M) {
         setTelemetryEvent(TE_VISION_ALTITUDE_TOO_LOW);
+        out_valid = false;
         out_world_x = drone_pose.field_x;
         out_world_y = drone_pose.field_y;
         return;
@@ -390,6 +429,7 @@ void VisionPipeline::projectToWorld(
     if (attitude_compensation_enabled_ && attitude.valid) {
         if (std::abs(attitude.roll_deg) > 30.0f || std::abs(attitude.pitch_deg) > 30.0f) {
             setTelemetryEvent(TE_VISION_ATTITUDE_INVALID);
+            out_valid = false;
             out_world_x = drone_pose.field_x;
             out_world_y = drone_pose.field_y;
             return;
@@ -445,6 +485,18 @@ void VisionPipeline::projectToWorld(
 // TEMPORAL PERSISTENCE & CANDIDATE REPORTING
 // ============================================================================
 
+void VisionPipeline::pruneStaleTracks(uint32_t now_ms) {
+    // Prune expired tracks on a wall-clock basis, regardless of camera state.
+    for (uint8_t t = 0; t < Config::VISION_MAX_PERSISTENCE_TRACKS; ++t) {
+        if (tracks_[t].active) {
+            if ((now_ms - tracks_[t].last_seen_ms) > Config::PERSISTENCE_TIMEOUT_MS) {
+                tracks_[t].active = false;
+                setTelemetryEvent(TE_VISION_TRACK_EXPIRED);
+            }
+        }
+    }
+}
+
 void VisionPipeline::updatePersistenceTracks(
     const VisionBlob* blobs,
     uint8_t blob_count,
@@ -462,7 +514,15 @@ void VisionPipeline::updatePersistenceTracks(
 
         float world_x = 0.0f;
         float world_y = 0.0f;
-        projectToWorld(blobs[b].centroid_x, blobs[b].centroid_y, fused_altitude_m, drone_pose, attitude, world_x, world_y);
+        bool proj_valid = false;
+        projectToWorld(blobs[b].centroid_x, blobs[b].centroid_y, fused_altitude_m, drone_pose, attitude, world_x, world_y, proj_valid);
+
+        // If projection was invalid due to excessive tilt, skip fusing this blob
+        // into any track entirely for this frame — decouple "we logged the fault"
+        // from "we still used the bad data."
+        if (!proj_valid) {
+            continue;
+        }
 
         // Confidence calculation formula
         float normalized_area_score = std::min(40.0f, 40.0f * (blobs[b].area / static_cast<float>(active_profile.expected_marker_area_px)));
@@ -474,22 +534,25 @@ void VisionPipeline::updatePersistenceTracks(
             continue;
         }
 
-        // Check distance match with existing persistence tracks
-        int match_idx = -1;
-        float min_dist_sq = Config::PERSISTENCE_RADIUS_M * Config::PERSISTENCE_RADIUS_M;
+        // Check distance match with existing persistence tracks.
+            // Skip tracks already claimed this frame (frame_id == frame_count_)
+            // so no track is double-claimed by multiple blobs in the same frame.
+            int match_idx = -1;
+            float min_dist_sq = Config::PERSISTENCE_RADIUS_M * Config::PERSISTENCE_RADIUS_M;
 
-        for (uint8_t t = 0; t < Config::VISION_MAX_PERSISTENCE_TRACKS; ++t) {
-            if (tracks_[t].active && tracks_[t].marker_type == active_profile_type_) {
-                float dx = tracks_[t].world_x - world_x;
-                float dy = tracks_[t].world_y - world_y;
-                float dist_sq = dx * dx + dy * dy;
+            for (uint8_t t = 0; t < Config::VISION_MAX_PERSISTENCE_TRACKS; ++t) {
+                if (tracks_[t].active && tracks_[t].marker_type == active_profile_type_ &&
+                    tracks_[t].frame_id != frame_count_) {
+                    float dx = tracks_[t].world_x - world_x;
+                    float dy = tracks_[t].world_y - world_y;
+                    float dist_sq = dx * dx + dy * dy;
 
-                if (dist_sq <= min_dist_sq) {
-                    min_dist_sq = dist_sq;
-                    match_idx = t;
+                    if (dist_sq <= min_dist_sq) {
+                        min_dist_sq = dist_sq;
+                        match_idx = t;
+                    }
                 }
             }
-        }
 
         if (match_idx >= 0) {
             // Fuse existing track
@@ -526,16 +589,6 @@ void VisionPipeline::updatePersistenceTracks(
                     setTelemetryEvent(TE_VISION_TRACK_CREATED);
                     break;
                 }
-            }
-        }
-    }
-
-    // 2. Decay and prune stale tracks
-    for (uint8_t t = 0; t < Config::VISION_MAX_PERSISTENCE_TRACKS; ++t) {
-        if (tracks_[t].active) {
-            if ((now_ms - tracks_[t].last_seen_ms) > Config::PERSISTENCE_TIMEOUT_MS) {
-                tracks_[t].active = false;
-                setTelemetryEvent(TE_VISION_TRACK_EXPIRED);
             }
         }
     }
@@ -581,6 +634,9 @@ void VisionPipeline::update(
     uint32_t start_us = Hal::hal_micros();
     last_process_time_ms_ = now_ms;
 
+    // Prune stale tracks on a wall-clock basis, even when no frame is retrieved.
+    pruneStaleTracks(now_ms);
+
     Hal::CameraFrame frame;
     if (!Hal::hal_camera_get_frame(frame)) {
         frame_timeout_count_++;
@@ -588,6 +644,8 @@ void VisionPipeline::update(
             camera_healthy_ = false;
             setTelemetryEvent(TE_VISION_FRAME_TIMEOUT);
         }
+        // Safety net: refuse to return candidates when camera is unhealthy
+        // so callers can't act on frozen, stale data.
         return;
     }
 
