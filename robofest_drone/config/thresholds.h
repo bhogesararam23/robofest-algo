@@ -205,6 +205,27 @@ constexpr bool VISION_ATTITUDE_COMPENSATION_ENABLED = true;
 // tunable implementation default
 constexpr float MIN_PROJECTION_ALTITUDE_M = 0.25f;
 
+// --- Morphological noise cleanup on binary mask (erode then dilate) ---
+// tunable implementation default
+constexpr bool VISION_MORPHOLOGY_ENABLED = true;
+
+// tunable implementation default (radius=1 means 3x3 kernel)
+constexpr uint8_t VISION_MORPHOLOGY_RADIUS = 1;
+
+// --- Spatial blur (3x3 box average) on RGB before HSV conversion ---
+// tunable implementation default
+constexpr bool VISION_BLUR_ENABLED = true;
+
+// --- Camera exposure / white-balance locking ---
+// tunable implementation default
+constexpr bool CAMERA_AUTO_EXPOSURE_ENABLED = false;
+
+// tunable implementation default (0 = use HAL/sensor default)
+constexpr int32_t CAMERA_MANUAL_EXPOSURE_VALUE = 0;
+
+// tunable implementation default
+constexpr bool CAMERA_AUTO_WHITEBALANCE_ENABLED = false;
+
 
 // ============================================================================
 // MINE MARKER HSV THRESHOLD PLACEHOLDERS

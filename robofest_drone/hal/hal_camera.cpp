@@ -1,5 +1,6 @@
 #include "hal_camera.h"
 #include "hal_system.h"
+#include <cstdio>
 
 namespace RobofestDrone {
 namespace Hal {
@@ -61,6 +62,30 @@ bool hal_camera_is_stub() {
 
 uint32_t hal_camera_get_last_frame_time_ms() {
     return s_last_frame_ms;
+}
+
+void hal_camera_set_auto_exposure(bool enabled) {
+    // Stub: On real OV5640 hardware, write AEC enable/disable registers via SCCB/I2C.
+    // e.g., sensor_set_reg(0x3503, enabled ? 0x00 : 0x07);
+    char buf[80];
+    std::snprintf(buf, sizeof(buf), "[HAL_CAMERA] Auto-exposure %s (stub)", enabled ? "ENABLED" : "DISABLED");
+    hal_log(buf);
+}
+
+void hal_camera_set_exposure(int32_t value) {
+    // Stub: On real OV5640 hardware, write manual exposure value registers.
+    // e.g., sensor_set_reg(0x3500..0x3502, value);
+    char buf[80];
+    std::snprintf(buf, sizeof(buf), "[HAL_CAMERA] Manual exposure set to %ld (stub)", static_cast<long>(value));
+    hal_log(buf);
+}
+
+void hal_camera_set_auto_whitebalance(bool enabled) {
+    // Stub: On real OV5640 hardware, write AWB enable/disable registers via SCCB/I2C.
+    // e.g., sensor_set_reg(0x3406, enabled ? 0x00 : 0x01);
+    char buf[80];
+    std::snprintf(buf, sizeof(buf), "[HAL_CAMERA] Auto-whitebalance %s (stub)", enabled ? "ENABLED" : "DISABLED");
+    hal_log(buf);
 }
 
 } // namespace Hal

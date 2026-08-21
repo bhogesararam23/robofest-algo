@@ -109,6 +109,9 @@ constexpr uint16_t TE_VISION_PROJECTION_DEGRADED             = 2213;
 constexpr uint16_t TE_VISION_ATTITUDE_INVALID                = 2214;
 constexpr uint16_t TE_VISION_ALTITUDE_TOO_LOW                = 2215;
 constexpr uint16_t TE_VISION_PROCESSING_SLOW                 = 2216;
+constexpr uint16_t TE_VISION_UNSUPPORTED_PIXEL_FORMAT         = 2217;
+constexpr uint16_t TE_VISION_BLOB_EXCEEDED_SCAN_BUFFER        = 2218;
+constexpr uint16_t TE_VISION_MORPHOLOGY_APPLIED               = 2219;
 
 constexpr uint16_t TE_FRAME_ACQUIRED                         = 2201;
 constexpr uint16_t TE_FRAME_DROPPED                          = 2202;

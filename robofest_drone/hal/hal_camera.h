@@ -47,5 +47,12 @@ bool hal_camera_read_frame();
 uint32_t hal_camera_get_last_frame_time_ms();
 bool hal_camera_is_stub(); // Runtime marker: true for stub, false for real camera
 
+// Camera exposure and white-balance control
+// On real hardware, these write OV5640 sensor registers via SCCB/I2C.
+// Locking exposure prevents auto-adjustment from invalidating calibrated HSV values.
+void hal_camera_set_auto_exposure(bool enabled);
+void hal_camera_set_exposure(int32_t value);
+void hal_camera_set_auto_whitebalance(bool enabled);
+
 } // namespace Hal
 } // namespace RobofestDrone

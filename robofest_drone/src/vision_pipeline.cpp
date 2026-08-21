@@ -14,6 +14,7 @@ namespace {
 
     // Static buffers to prevent any heap allocation on the embedded vision update path
     static uint8_t s_binary_mask[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
+    static uint8_t s_morph_temp[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
     static uint16_t s_bfs_x[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
     static uint16_t s_bfs_y[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
     static VisionBlob s_extracted_blobs[Config::VISION_MAX_BLOBS];
@@ -31,6 +32,15 @@ void VisionPipeline::init() {
     reset();
     Hal::hal_camera_init();
     camera_healthy_ = Hal::hal_camera_is_healthy();
+
+    // Lock camera exposure and white-balance to prevent auto-adjustment from
+    // invalidating calibrated HSV values mid-flight.
+    Hal::hal_camera_set_auto_exposure(Config::CAMERA_AUTO_EXPOSURE_ENABLED);
+    if (Config::CAMERA_MANUAL_EXPOSURE_VALUE != 0) {
+        Hal::hal_camera_set_exposure(Config::CAMERA_MANUAL_EXPOSURE_VALUE);
+    }
+    Hal::hal_camera_set_auto_whitebalance(Config::CAMERA_AUTO_WHITEBALANCE_ENABLED);
+
     if (Hal::hal_camera_is_stub()) {
         setTelemetryEvent(TE_VISION_MASK_EMPTY); // Distinct event: using stub camera, no real data
         hal_log("[VISION] Using stub camera - no real image data being processed.");
@@ -200,6 +210,41 @@ void VisionPipeline::segmentHsvMask(const Hal::CameraFrame& frame, const VisionM
                 continue;
             }
 
+            // Optional 3x3 box blur: average the pixel with its neighbors to smooth
+            // single-pixel sensor noise before HSV conversion. Only applies when
+            // blur is enabled AND the pixel is not at the frame boundary.
+            if (Config::VISION_BLUR_ENABLED &&
+                src_x > 0 && src_y > 0 &&
+                src_x < (frame.width - 1) && src_y < (frame.height - 1)) {
+                uint32_t sum_r = r, sum_g = g, sum_b = b;
+                uint8_t count = 1;
+                // Sample 4 cardinal neighbors (cheaper than full 3x3, good enough for noise)
+                static const int16_t ndx[4] = {-1, 1, 0, 0};
+                static const int16_t ndy[4] = {0, 0, -1, 1};
+                for (int n = 0; n < 4; ++n) {
+                    uint16_t nx = static_cast<uint16_t>(src_x + ndx[n]);
+                    uint16_t ny = static_cast<uint16_t>(src_y + ndy[n]);
+                    if (frame.format == Hal::PixelFormat::PIXEL_FORMAT_RGB565) {
+                        uint32_t ni = (ny * frame.width + nx) * 2;
+                        uint16_t np = Config::RGB565_LE_BYTE_ORDER
+                            ? (frame.data[ni] | (frame.data[ni + 1] << 8))
+                            : (frame.data[ni + 1] | (frame.data[ni] << 8));
+                        sum_r += ((np >> 11) & 0x1F) << 3;
+                        sum_g += ((np >> 5) & 0x3F) << 2;
+                        sum_b += (np & 0x1F) << 3;
+                    } else {
+                        uint32_t ni = (ny * frame.width + nx) * 3;
+                        sum_r += frame.data[ni];
+                        sum_g += frame.data[ni + 1];
+                        sum_b += frame.data[ni + 2];
+                    }
+                    count++;
+                }
+                r = static_cast<uint8_t>(sum_r / count);
+                g = static_cast<uint8_t>(sum_g / count);
+                b = static_cast<uint8_t>(sum_b / count);
+            }
+
             // Fast inline RGB to HSV conversion
             uint8_t c_max = std::max(r, std::max(g, b));
             uint8_t c_min = std::min(r, std::min(g, b));
@@ -232,6 +277,68 @@ void VisionPipeline::segmentHsvMask(const Hal::CameraFrame& frame, const VisionM
 
             if (h_ok && s_ok && v_ok) {
                 s_binary_mask[py * Config::VISION_PROCESS_WIDTH + px] = 1;
+            }
+        }
+    }
+}
+
+
+// ============================================================================
+// MORPHOLOGICAL NOISE CLEANUP (ERODE + DILATE ON BINARY MASK)
+// ============================================================================
+
+void VisionPipeline::applyMorphologyCleanup() {
+    if (!Config::VISION_MORPHOLOGY_ENABLED) {
+        return;
+    }
+
+    const uint16_t W = Config::VISION_PROCESS_WIDTH;
+    const uint16_t H = Config::VISION_PROCESS_HEIGHT;
+    const uint8_t R = Config::VISION_MORPHOLOGY_RADIUS;
+
+    // Pass 1: Erosion — pixel stays ON only if ALL neighbors within radius are ON.
+    // This removes isolated noise specks smaller than the kernel.
+    std::memcpy(s_morph_temp, s_binary_mask, W * H);
+    for (uint16_t y = 0; y < H; ++y) {
+        for (uint16_t x = 0; x < W; ++x) {
+            if (s_morph_temp[y * W + x] == 0) continue;
+            bool all_set = true;
+            for (int16_t dy = -R; dy <= R && all_set; ++dy) {
+                for (int16_t dx = -R; dx <= R && all_set; ++dx) {
+                    int16_t nx = static_cast<int16_t>(x) + dx;
+                    int16_t ny = static_cast<int16_t>(y) + dy;
+                    if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
+                        all_set = false;
+                    } else if (s_morph_temp[ny * W + nx] == 0) {
+                        all_set = false;
+                    }
+                }
+            }
+            s_binary_mask[y * W + x] = all_set ? 1 : 0;
+        }
+    }
+
+    // Pass 2: Dilation — pixel turns ON if ANY neighbor within radius is ON.
+    // This restores the object shape that erosion may have slightly shrunk,
+    // and fills small internal holes so contourArea isn't underestimated.
+    std::memcpy(s_morph_temp, s_binary_mask, W * H);
+    for (uint16_t y = 0; y < H; ++y) {
+        for (uint16_t x = 0; x < W; ++x) {
+            if (s_morph_temp[y * W + x] != 0) continue;
+            bool any_set = false;
+            for (int16_t dy = -R; dy <= R && !any_set; ++dy) {
+                for (int16_t dx = -R; dx <= R && !any_set; ++dx) {
+                    int16_t nx = static_cast<int16_t>(x) + dx;
+                    int16_t ny = static_cast<int16_t>(y) + dy;
+                    if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
+                        if (s_morph_temp[ny * W + nx] != 0) {
+                            any_set = true;
+                        }
+                    }
+                }
+            }
+            if (any_set) {
+                s_binary_mask[y * W + x] = 1;
             }
         }
     }
@@ -318,19 +425,13 @@ while (q_head < q_tail && q_tail < Config::VISION_PROCESS_WIDTH * Config::VISION
                     setTelemetryEvent(TE_VISION_BLOB_EXCEEDED_SCAN_BUFFER);
                     continue; // Discard this entire blob - don't measure/score partial region
                 }
-                        }
-                    }
-
-                    if (is_border_pixel) {
-                        perimeter++;
-                    }
-                }
 
                 // Rescale metrics to full camera frame coordinates
                 float scale_x = static_cast<float>(Config::IMAGE_WIDTH) / static_cast<float>(Config::VISION_PROCESS_WIDTH);
                 float scale_y = static_cast<float>(Config::IMAGE_HEIGHT) / static_cast<float>(Config::VISION_PROCESS_HEIGHT);
                 float full_area = static_cast<float>(area) * (scale_x * scale_y);
                 float full_perimeter = static_cast<float>(perimeter) * std::sqrt((scale_x * scale_x + scale_y * scale_y) * 0.5f);
+
 
                 if (full_perimeter < 1.0f) full_perimeter = 1.0f;
 
@@ -658,6 +759,7 @@ void VisionPipeline::update(
 
     // Execute vision pipeline stages
     segmentHsvMask(frame, active_profile);
+    applyMorphologyCleanup();
     uint8_t blob_count = extractBlobs(active_profile);
     updatePersistenceTracks(s_extracted_blobs, blob_count, drone_pose, fused_altitude_m, attitude, now_ms);
 
