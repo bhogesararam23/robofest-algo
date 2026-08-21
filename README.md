@@ -24,7 +24,7 @@ The mission is to detect surface-laid mines and buried mine markers across a 15-
 | Companion Computer | Seeed Studio XIAO ESP32-S3 Sense | Dual-Core 240MHz, 8MB PSRAM, 8MB Flash | Vision, mapping, path planning, swarm mesh |
 | Flight Controller | Matek H743-SLIM V3 | STM32H743 @ 480MHz, Dual IMU (MPU6000 + ICM-42605) | Attitude stabilization, motor mixing |
 | ESC | Foxeer Reaper F4 65A 4-in-1 | 65A continuous, 100A burst, DShot600 | Brushless motor power control |
-| BLDC Motors | Darwin 1504 2300KV | Micro brushless motors | Propulsion on 4S power |
+| BLDC Motors | T motor P1604 2850kv | Micro brushless motors | Propulsion on 4S power |
 | Propellers | Gemfan Hurricane 4024 | 4.0 inch diameter, 2.4 inch pitch | Low vibration aerodynamic thrust |
 | Camera | OmniVision OV5640 5MP | DVP parallel interface to ESP32-S3 | Downward mine and marker detection |
 | Ground Distance | Holybro ST VL53L1X LiDAR | 0.04m to 4.0m range, 50Hz I2C | Altitude measurement and ground clearance |
@@ -136,10 +136,3 @@ python sim/sitl_harness.py --seed 42 --scenario dense_map --drones 4 --mines 60 
 # Evaluate score from a run file
 python sim/score_eval.py run_nominal.json --report run_nominal_score.md
 ```
-
-## Pre-Flight Safety Rules
-
-- Remove all propellers during bench testing, firmware flashing, and sensor calibration.
-- Verify the physical hardware kill switch operates correctly before arming.
-- Check battery voltage is at or above 14.8V before takeoff.
-- Ensure optical flow and camera lenses are clean and unobstructed.
