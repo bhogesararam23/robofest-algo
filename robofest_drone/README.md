@@ -122,7 +122,7 @@ robofest_drone/
 ### 5.1 Run Offline Unit Tests (Desktop GCC / MinGW)
 ```bash
 cd robofest_drone
-g++ -std=c++17 -Wall -Wextra -I./src -I./hal -I./config tests/*.cpp src/geofence.cpp src/path_planner.cpp src/mine_map.cpp src/command_layer.cpp src/telemetry.cpp hal/*.cpp -o robofest_unit_tests.exe
+g++ -std=c++17 -Wall -Wextra -I./src -I./hal -I./config tests/*.cpp src/vision_pipeline.cpp src/geofence.cpp src/path_planner.cpp src/mine_map.cpp src/command_layer.cpp src/telemetry.cpp src/calibration/hsv_tuner.cpp hal/*.cpp -o robofest_unit_tests.exe
 ./robofest_unit_tests.exe
 ```
 
@@ -149,3 +149,4 @@ python sim/sitl_harness.py --seed 1 --scenario nominal_map --drones 3 --mines 40
 
 > [!CAUTION]
 > **SAFETY FIRST**: Always remove all propellers before powering up with USB connected or testing motor communication links. Never attempt flight without verifying the physical hardware kill switch functionality on `KILL_SWITCH_PIN` (GPIO 0).
+

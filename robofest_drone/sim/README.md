@@ -98,3 +98,21 @@ python sim/score_eval.py run_nominal.json --report run_nominal_score.md
   Tune HSV thresholds in `src/calibration/hsv_tuner.cpp` or widen `Config::BURIED_SURFACE_MARKER_HSV_LOW/HIGH`.
 - **If Drift Uncertainty Exceeds Geofence Limits**:
   Increase `GEOFENCE_UNCERTAINTY_EXTRA_MARGIN_M` in `config/mission_config.h`.
+
+## CV Laptop Calibration Protocol (`cv_laptop_protocol.py`)
+
+Multi-color / multi-shape calibration tool mirroring the onboard pipeline.
+Calibrate all marker colors under real lighting, then export straight to firmware:
+
+```
+python cv_laptop_protocol.py                 # live webcam tuning
+python cv_laptop_protocol.py --export-only cv_hsv_config.json   # headless export
+```
+
+Keys: `[1..0]` select profile | `[ / ] / P` cycle profiles | `[A]` enable/disable |
+`[L]` edit ALT (overcast) band | `[M]` multi-color scan | `[N]` exposure normalization |
+`[K]` lighting AUTO/SUNNY/OVERCAST | `[C]` shape preset cycle | `[R]` reset |
+`[S]` save JSON | `[E]` EXPORT `config/vision_profiles_generated.h`
+
+The exported header overrides the built-in table in `config/vision_profiles.h`
+(delete it to fall back). HSV scale matches firmware directly: H 0-180, S/V 0-255.

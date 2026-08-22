@@ -8,33 +8,19 @@
 
 namespace RobofestDrone {
 
+namespace {
+    // Telemetry event block used by onboard calibration saves (vision range
+    // 2200-2299; profile saves occupy 2250..2250+VISION_PROFILE_MAX-1).
+    constexpr uint16_t TE_HSV_TUNER_PROFILE_SAVE_BASE = 2250;
+}
+
 HsvTuner::HsvTuner() {
     init();
 }
 
 void HsvTuner::init() {
-    // Default profile for on-ground high-contrast mine markers
-    on_ground_profile_.profile_type = Types::VisionMarkerType::ON_GROUND_MINE;
-    on_ground_profile_.enabled = true;
-    on_ground_profile_.h_min = Config::ON_GROUND_MINE_HSV_LOW.h;
-    on_ground_profile_.h_max = Config::ON_GROUND_MINE_HSV_HIGH.h;
-    on_ground_profile_.s_min = Config::ON_GROUND_MINE_HSV_LOW.s;
-    on_ground_profile_.s_max = Config::ON_GROUND_MINE_HSV_HIGH.s;
-    on_ground_profile_.v_min = Config::ON_GROUND_MINE_HSV_LOW.v;
-    on_ground_profile_.v_max = Config::ON_GROUND_MINE_HSV_HIGH.v;
-
-    // Default profile for buried surface markers (e.g. ribbon markers)
-    buried_marker_profile_.profile_type = Types::VisionMarkerType::BURIED_SURFACE_MARKER;
-    buried_marker_profile_.enabled = true;
-    buried_marker_profile_.h_min = Config::BURIED_SURFACE_MARKER_HSV_LOW.h;
-    buried_marker_profile_.h_max = Config::BURIED_SURFACE_MARKER_HSV_HIGH.h;
-    buried_marker_profile_.s_min = Config::BURIED_SURFACE_MARKER_HSV_LOW.s;
-    buried_marker_profile_.s_max = Config::BURIED_SURFACE_MARKER_HSV_HIGH.s;
-    buried_marker_profile_.v_min = Config::BURIED_SURFACE_MARKER_HSV_LOW.v;
-    buried_marker_profile_.v_max = Config::BURIED_SURFACE_MARKER_HSV_HIGH.v;
-
-    active_profile_type_ = Types::VisionMarkerType::ON_GROUND_MINE;
-    active_profile_ = on_ground_profile_;
+    active_index_ = 0;
+    edit_alt_ = false;
     stats_ = HsvTunerStats();
 }
 
@@ -42,46 +28,87 @@ void HsvTuner::reset() {
     init();
 }
 
-void HsvTuner::setActiveProfile(Types::VisionMarkerType profile_type) {
-    if (active_profile_type_ == Types::VisionMarkerType::ON_GROUND_MINE) {
-        on_ground_profile_ = active_profile_;
-    } else {
-        buried_marker_profile_ = active_profile_;
-    }
-
-    active_profile_type_ = profile_type;
-    if (profile_type == Types::VisionMarkerType::ON_GROUND_MINE) {
-        active_profile_ = on_ground_profile_;
-    } else {
-        active_profile_ = buried_marker_profile_;
-    }
+static VisionPipeline& tuner_pipeline() {
+    return vision_pipeline_get_instance();
 }
 
+bool HsvTuner::setActiveProfileByIndex(uint8_t index) {
+    if (index >= tuner_pipeline().getProfileCount()) return false;
+    active_index_ = index;
+    return true;
+}
+
+bool HsvTuner::setActiveProfileByType(Types::VisionMarkerType type) {
+    for (uint8_t i = 0; i < tuner_pipeline().getProfileCount(); ++i) {
+        const VisionMarkerProfile* p = tuner_pipeline().getProfileByIndex(i);
+        if (p != nullptr && p->profile_type == type) {
+            active_index_ = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+void HsvTuner::cycleProfile() {
+    uint8_t count = tuner_pipeline().getProfileCount();
+    if (count == 0) return;
+    active_index_ = static_cast<uint8_t>((active_index_ + 1) % count);
+}
+
+Types::VisionMarkerType HsvTuner::getActiveProfileType() const {
+    const VisionMarkerProfile* p = getActiveProfile();
+    return (p != nullptr) ? p->profile_type : Types::VisionMarkerType::UNKNOWN;
+}
+
+VisionMarkerProfile* HsvTuner::getActiveProfile() {
+    return tuner_pipeline().getProfileByIndex(active_index_);
+}
+
+const VisionMarkerProfile* HsvTuner::getActiveProfile() const {
+    return tuner_pipeline().getProfileByIndex(active_index_);
+}
+
+// Hue scale matches the vision pipeline exactly: H in [0,180), S/V in [0,255].
 void HsvTuner::rgbToHsv(uint8_t r, uint8_t g, uint8_t b, uint8_t& h, uint8_t& s, uint8_t& v) const {
-    uint8_t rgb_min = std::min({r, g, b});
-    uint8_t rgb_max = std::max({r, g, b});
-    v = rgb_max;
-    if (v == 0) {
-        h = 0;
-        s = 0;
-        return;
-    }
-    s = static_cast<uint8_t>(255 * (static_cast<int32_t>(rgb_max - rgb_min)) / v);
-    if (s == 0) {
-        h = 0;
-        return;
-    }
-    if (rgb_max == r) {
-        h = static_cast<uint8_t>(0 + 43 * (g - b) / (rgb_max - rgb_min));
-    } else if (rgb_max == g) {
-        h = static_cast<uint8_t>(85 + 43 * (b - r) / (rgb_max - rgb_min));
-    } else {
-        h = static_cast<uint8_t>(171 + 43 * (r - g) / (rgb_max - rgb_min));
+    uint8_t c_max = std::max(r, std::max(g, b));
+    uint8_t c_min = std::min(r, std::min(g, b));
+    uint8_t delta = c_max - c_min;
+
+    v = c_max;
+    s = (c_max == 0) ? 0 : static_cast<uint8_t>((255UL * delta) / c_max);
+    h = 0;
+
+    if (delta > 0) {
+        int16_t h_calc = 0;
+        if (c_max == r) {
+            h_calc = 30 * (static_cast<int16_t>(g) - static_cast<int16_t>(b)) / delta;
+        } else if (c_max == g) {
+            h_calc = 60 + 30 * (static_cast<int16_t>(b) - static_cast<int16_t>(r)) / delta;
+        } else {
+            h_calc = 120 + 30 * (static_cast<int16_t>(r) - static_cast<int16_t>(g)) / delta;
+        }
+        if (h_calc < 0) h_calc += 180;
+        h = static_cast<uint8_t>(h_calc);
     }
 }
 
 void HsvTuner::processFrame(const uint8_t* rgb_frame, uint16_t width, uint16_t height) {
     if (rgb_frame == nullptr || width == 0 || height == 0) return;
+
+    const VisionMarkerProfile* p = getActiveProfile();
+    if (p == nullptr) return;
+
+    // Band selection mirrors the pipeline's adaptive-lighting rule so the
+    // statistics describe exactly the band that will run in production.
+    bool use_alt = edit_alt_ ||
+        (tuner_pipeline().getLightingMode() == VisionLightingMode::OVERCAST_ALT && p->has_alt_band);
+
+    uint8_t bh_min = use_alt ? p->alt_h_min : p->h_min;
+    uint8_t bh_max = use_alt ? p->alt_h_max : p->h_max;
+    uint8_t bs_min = use_alt ? p->alt_s_min : p->s_min;
+    uint8_t bs_max = use_alt ? p->alt_s_max : p->s_max;
+    uint8_t bv_min = use_alt ? p->alt_v_min : p->v_min;
+    uint8_t bv_max = use_alt ? p->alt_v_max : p->v_max;
 
     uint32_t total_px = width * height;
     uint32_t masked_count = 0;
@@ -97,19 +124,7 @@ void HsvTuner::processFrame(const uint8_t* rgb_frame, uint16_t width, uint16_t h
         uint8_t h = 0, s = 0, v = 0;
         rgbToHsv(r, g, b, h, s, v);
 
-        // Check if pixel falls inside active HSV threshold window
-        bool h_pass = false;
-        if (active_profile_.h_min <= active_profile_.h_max) {
-            h_pass = (h >= active_profile_.h_min && h <= active_profile_.h_max);
-        } else {
-            // Hue wraparound
-            h_pass = (h >= active_profile_.h_min || h <= active_profile_.h_max);
-        }
-
-        bool s_pass = (s >= active_profile_.s_min && s <= active_profile_.s_max);
-        bool v_pass = (v >= active_profile_.v_min && v <= active_profile_.v_max);
-
-        if (h_pass && s_pass && v_pass) {
+        if (vision_hsv_in_band(h, s, v, bh_min, bh_max, bs_min, bs_max, bv_min, bv_max)) {
             masked_count++;
             sum_h += h;
             sum_s += s;
@@ -131,63 +146,132 @@ bool HsvTuner::parseCommand(const char* cmd_str) {
     char key[32] = {};
     int delta = 0;
 
-    if (std::sscanf(cmd_str, "%31s %d", key, &delta) == 2) {
-        if (std::strcmp(key, "H_MIN") == 0) {
-            int val = static_cast<int>(active_profile_.h_min) + delta;
-            active_profile_.h_min = static_cast<uint8_t>(std::max(0, std::min(255, val)));
-            return true;
-        } else if (std::strcmp(key, "H_MAX") == 0) {
-            int val = static_cast<int>(active_profile_.h_max) + delta;
-            active_profile_.h_max = static_cast<uint8_t>(std::max(0, std::min(255, val)));
-            return true;
-        } else if (std::strcmp(key, "S_MIN") == 0) {
-            int val = static_cast<int>(active_profile_.s_min) + delta;
-            active_profile_.s_min = static_cast<uint8_t>(std::max(0, std::min(255, val)));
-            return true;
-        } else if (std::strcmp(key, "S_MAX") == 0) {
-            int val = static_cast<int>(active_profile_.s_max) + delta;
-            active_profile_.s_max = static_cast<uint8_t>(std::max(0, std::min(255, val)));
-            return true;
-        } else if (std::strcmp(key, "V_MIN") == 0) {
-            int val = static_cast<int>(active_profile_.v_min) + delta;
-            active_profile_.v_min = static_cast<uint8_t>(std::max(0, std::min(255, val)));
-            return true;
-        } else if (std::strcmp(key, "V_MAX") == 0) {
-            int val = static_cast<int>(active_profile_.v_max) + delta;
-            active_profile_.v_max = static_cast<uint8_t>(std::max(0, std::min(255, val)));
-            return true;
+    VisionMarkerProfile* p = getActiveProfile();
+    if (p != nullptr) {
+        uint8_t* hmin = edit_alt_ ? &p->alt_h_min : &p->h_min;
+        uint8_t* hmax = edit_alt_ ? &p->alt_h_max : &p->h_max;
+        uint8_t* smin = edit_alt_ ? &p->alt_s_min : &p->s_min;
+        uint8_t* smax = edit_alt_ ? &p->alt_s_max : &p->s_max;
+        uint8_t* vmin = edit_alt_ ? &p->alt_v_min : &p->v_min;
+        uint8_t* vmax = edit_alt_ ? &p->alt_v_max : &p->v_max;
+
+        if (std::sscanf(cmd_str, "%31s %d", key, &delta) == 2) {
+            struct UintField { const char* name; uint8_t* ptr; };
+            UintField fields[] = {
+                {"H_MIN", hmin}, {"H_MAX", hmax},
+                {"S_MIN", smin}, {"S_MAX", smax},
+                {"V_MIN", vmin}, {"V_MAX", vmax},
+            };
+            for (auto& f : fields) {
+                if (std::strcmp(key, f.name) == 0) {
+                    int val = static_cast<int>(*f.ptr) + delta;
+                    *f.ptr = static_cast<uint8_t>(std::max(0, std::min(255, val)));
+                    return true;
+                }
+            }
+
+            struct ShapeField { const char* name; float* ptr; float scale; };
+            ShapeField shape_fields[] = {
+                {"EXT_MIN", &p->extent_min, 0.01f},
+                {"EXT_MAX", &p->extent_max, 0.01f},
+                {"SOL_MIN", &p->solidity_min, 0.01f},
+                {"ASP_MIN", &p->aspect_min, 0.01f},
+                {"ASP_MAX", &p->aspect_max, 0.01f},
+            };
+            for (auto& f : shape_fields) {
+                if (std::strcmp(key, f.name) == 0) {
+                    *f.ptr += delta * f.scale;
+                    if (*f.ptr < 0.0f) *f.ptr = 0.0f;
+                    return true;
+                }
+            }
+
+            if (std::strcmp(key, "CORN_MIN") == 0) {
+                int val = static_cast<int>(p->corners_min) + delta;
+                p->corners_min = static_cast<uint8_t>(std::max(0, std::min(255, val)));
+                return true;
+            }
+            if (std::strcmp(key, "CORN_MAX") == 0) {
+                int val = static_cast<int>(p->corners_max) + delta;
+                p->corners_max = static_cast<uint8_t>(std::max(0, std::min(255, val)));
+                return true;
+            }
+
+            if (std::strcmp(key, "AREA_MIN") == 0) {
+                int val = static_cast<int>(p->min_area_px) + delta;
+                p->min_area_px = std::max(0.0f, static_cast<float>(val));
+                return true;
+            }
+            if (std::strcmp(key, "AREA_MAX") == 0) {
+                int val = static_cast<int>(p->max_area_px) + delta;
+                p->max_area_px = std::max(0.0f, static_cast<float>(val));
+                return true;
+            }
         }
-    } else if (std::sscanf(cmd_str, "%31s", key) == 1) {
+    }
+
+    if (std::sscanf(cmd_str, "%31s", key) == 1) {
         if (std::strcmp(key, "SAVE") == 0) {
             return saveToStorage();
         } else if (std::strcmp(key, "RESET") == 0) {
+            tuner_pipeline().restoreProfileDefaults();
             reset();
             return true;
         } else if (std::strcmp(key, "PROFILE_GROUND") == 0) {
-            setActiveProfile(Types::VisionMarkerType::ON_GROUND_MINE);
-            return true;
+            return setActiveProfileByType(Types::VisionMarkerType::ON_GROUND_MINE);
         } else if (std::strcmp(key, "PROFILE_BURIED") == 0) {
-            setActiveProfile(Types::VisionMarkerType::BURIED_SURFACE_MARKER);
+            return setActiveProfileByType(Types::VisionMarkerType::BURIED_SURFACE_MARKER);
+        } else if (std::strcmp(key, "PROFILE_NEXT") == 0) {
+            cycleProfile();
             return true;
+        } else if (std::strcmp(key, "BAND_ALT") == 0) {
+            edit_alt_ = true;
+            return true;
+        } else if (std::strcmp(key, "BAND_PRIMARY") == 0) {
+            edit_alt_ = false;
+            return true;
+        } else if (std::strcmp(key, "ENABLE_ALL") == 0) {
+            tuner_pipeline().setAllProfilesEnabled(true);
+            return true;
+        } else if (std::strncmp(key, "PROFILE_N", 9) == 0) {
+            // "PROFILE_N <index>"
+            char dummy[32] = {};
+            int idx = -1;
+            if (std::sscanf(cmd_str, "%31s %d", dummy, &idx) == 2 && idx >= 0) {
+                return setActiveProfileByIndex(static_cast<uint8_t>(idx));
+            }
+            return false;
         }
     }
     return false;
 }
 
 bool HsvTuner::saveToStorage() {
-    Hal::hal_log("[HSV_TUNER] Saving calibrated HSV thresholds to persistent storage...");
-    // Persist as a calibration telemetry record to flash
-    Types::TelemetryEvent evt;
-    evt.timestamp_ms = Hal::hal_millis();
-    evt.event_id = 2200; // TE_VISION_INITIALIZED
-    evt.severity = Types::TELEMETRY_SEVERITY_INFO;
-    evt.module_id = 4;   // Vision Pipeline
-    evt.value_a = static_cast<float>(active_profile_.h_min);
-    evt.value_b = static_cast<float>(active_profile_.h_max);
-    evt.context_id = (active_profile_.s_min << 8) | active_profile_.v_min;
+    Hal::hal_log("[HSV_TUNER] Saving calibrated profiles to persistent storage...");
+    VisionPipeline& vp = tuner_pipeline();
 
-    Hal::hal_storage_write_event(evt);
-    return Hal::hal_storage_flush();
+    bool ok = true;
+    for (uint8_t i = 0; i < vp.getProfileCount(); ++i) {
+        const VisionMarkerProfile* prof = vp.getProfileByIndex(i);
+        if (prof == nullptr) continue;
+
+        Types::TelemetryEvent evt;
+        evt.timestamp_ms = Hal::hal_millis();
+        evt.event_id = static_cast<uint16_t>(TE_HSV_TUNER_PROFILE_SAVE_BASE + i);
+        evt.severity = Types::TELEMETRY_SEVERITY_INFO;
+        evt.module_id = Types::TELEMETRY_MODULE_VISION;
+        // Pack primary band bounds as exactly-representable integers
+        evt.value_a = static_cast<float>(
+            prof->h_min | (prof->h_max << 8) | (prof->s_min << 16));
+        evt.value_b = static_cast<float>(
+            prof->v_min | (prof->v_max << 8));
+        evt.context_id = static_cast<uint16_t>(
+            i | (static_cast<uint8_t>(prof->profile_type) << 8));
+
+        Hal::hal_storage_write_event(evt);
+    }
+    ok = Hal::hal_storage_flush();
+    return ok;
 }
 
 bool HsvTuner::loadFromStorage() {
@@ -196,17 +280,34 @@ bool HsvTuner::loadFromStorage() {
 }
 
 void HsvTuner::printStatus() const {
-    char buf[160];
+    const VisionMarkerProfile* p = getActiveProfile();
+    if (p == nullptr) {
+        Hal::hal_log("[HSV_TUNER] No active profile.");
+        return;
+    }
+
+    char buf[224];
     std::snprintf(buf, sizeof(buf),
-        "[HSV_TUNER] Prof:%s H:[%d,%d] S:[%d,%d] V:[%d,%d] MaskPx:%lu (%.1f%%) Avg:[H:%d S:%d V:%d]",
-        (active_profile_type_ == Types::VisionMarkerType::ON_GROUND_MINE) ? "GROUND" : "BURIED",
-        active_profile_.h_min, active_profile_.h_max,
-        active_profile_.s_min, active_profile_.s_max,
-        active_profile_.v_min, active_profile_.v_max,
+        "[HSV_TUNER] Idx:%u Type:%u Band:%s H:[%d,%d] S:[%d,%d] V:[%d,%d] "
+        "Area:[%.0f,%.0f] Circ:%.2f Ext:[%.2f,%.2f] Sol:%.2f Corn:[%u,%u] "
+        "MaskPx:%lu (%.1f%%)",
+        static_cast<unsigned>(active_index_),
+        static_cast<unsigned>(static_cast<uint8_t>(p->profile_type)),
+        edit_alt_ ? "ALT" : "PRIMARY",
+        edit_alt_ ? p->alt_h_min : p->h_min,
+        edit_alt_ ? p->alt_h_max : p->h_max,
+        edit_alt_ ? p->alt_s_min : p->s_min,
+        edit_alt_ ? p->alt_s_max : p->s_max,
+        edit_alt_ ? p->alt_v_min : p->v_min,
+        edit_alt_ ? p->alt_v_max : p->v_max,
+        p->min_area_px, p->max_area_px, p->circularity_min,
+        p->extent_min, p->extent_max, p->solidity_min,
+        static_cast<unsigned>(p->corners_min),
+        static_cast<unsigned>(p->corners_max),
         static_cast<unsigned long>(stats_.masked_pixels),
-        stats_.masked_ratio * 100.0f,
-        stats_.avg_hue, stats_.avg_sat, stats_.avg_val);
+        stats_.masked_ratio * 100.0f);
     Hal::hal_log(buf);
 }
 
 } // namespace RobofestDrone
+

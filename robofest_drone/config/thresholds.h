@@ -137,13 +137,14 @@ constexpr uint16_t VISION_PROCESS_WIDTH = 160;
 constexpr uint16_t VISION_PROCESS_HEIGHT = 120;
 
 // tunable implementation default
-constexpr uint8_t VISION_MAX_BLOBS = 16;
+constexpr uint8_t VISION_MAX_BLOBS = 24;
 
 // tunable implementation default
 constexpr uint8_t VISION_MAX_CANDIDATES = 16;
 
-// tunable implementation default
-constexpr uint8_t VISION_MAX_PERSISTENCE_TRACKS = 24;
+// Re-tuned (Step 11): multi-color scanning yields more simultaneous blobs,
+// so the track pool was widened from 24 to 32 slots.
+constexpr uint8_t VISION_MAX_PERSISTENCE_TRACKS = 32;
 
 // tunable implementation default
 constexpr uint16_t IMAGE_WIDTH = 320;
@@ -173,7 +174,9 @@ constexpr float BLOB_AREA_MIN_PX = 25.0f;
 constexpr float BLOB_AREA_MAX_PX = 2500.0f;
 
 // tunable implementation default
-constexpr float CONFIDENCE_REPORT_MIN = 45.0f;
+constexpr float CONFIDENCE_REPORT_MIN = 50.0f;
+// Re-tuned (Step 11): with many profiles scanning simultaneously the noise floor
+// rises, so the reporting bar was nudged from 45 to 50.
 
 // derived from uploaded logic
 constexpr float PERSISTENCE_RADIUS_M = 0.25f;
@@ -242,6 +245,71 @@ constexpr HsvColor BURIED_SURFACE_MARKER_HSV_LOW = {25, 120, 120};
 
 // tunable implementation default
 constexpr HsvColor BURIED_SURFACE_MARKER_HSV_HIGH = {40, 255, 255};
+
+
+// ============================================================================
+// VISION PROFILE TABLE / SHAPE / LIGHTING / EXPOSURE CONFIGURATION
+// ============================================================================
+
+// Maximum number of marker profiles in the runtime table (data-driven, Step 1).
+constexpr uint8_t VISION_PROFILE_MAX = 16;
+
+// --- Shape descriptor pipeline (Steps 7-9) ---
+// Corner counting via Douglas-Peucker on the blob boundary polyline.
+constexpr bool VISION_CORNER_DETECT_ENABLED = true;
+
+// tunable implementation default (epsilon = ratio * bbox diagonal)
+constexpr float SHAPE_CORNER_EPSILON_RATIO = 0.035f;
+
+// Static buffers for boundary-pixel collection and convex hull computation.
+constexpr uint16_t VISION_BOUNDARY_POINTS_MAX = 384;
+constexpr uint16_t VISION_HULL_POINTS_MAX = 192;
+
+// Labels with fewer pixels than this skip the morphology pass entirely.
+// Must stay below BLOB_AREA_MIN_PX expressed in process-resolution pixels
+// (25 full-frame px / (2x2 downscale)^2 = ~6) so real markers are never erased.
+constexpr uint16_t VISION_MORPH_MIN_LABEL_PX = 6;
+
+// --- Confidence blend weights (Step 8) ---
+// confidence = min(circ_term) + shape_match*W + area_term + bias, clamped 0..100.
+constexpr float CONF_WEIGHT_CIRCULARITY = 24.0f;
+constexpr float CONF_WEIGHT_SHAPE_MATCH = 36.0f;
+constexpr float CONF_WEIGHT_AREA = 40.0f;
+
+// Circularity term saturates when it reaches this value.
+constexpr float CONF_CIRC_PERFECT_AT = 0.85f;
+
+// Soft falloff margin for descriptor gates: outside [min,max] the score decays
+// linearly over this fraction of the gate span before reaching zero.
+constexpr float CONF_GATE_SOFT_MARGIN_RATIO = 0.25f;
+
+
+// ============================================================================
+// EXPOSURE NORMALIZATION & LIGHTING FALLBACK (STEPS 5-6)
+// ============================================================================
+
+// Software gain normalization: frame mean-V is measured on a subsample grid and
+// a clamped scalar gain drives RGB toward the target mean before HSV conversion.
+constexpr bool VISION_EXPOSURE_NORM_ENABLED = true;
+
+// tunable implementation default
+constexpr uint8_t VISION_EXPOSURE_TARGET_MEAN_V = 135;
+
+// tunable implementation default
+constexpr float VISION_EXPOSURE_GAIN_MIN = 0.70f;
+
+// tunable implementation default
+constexpr float VISION_EXPOSURE_GAIN_MAX = 1.50f;
+
+// Lighting-condition fallback: each profile carries two calibrated bands.
+// Frame mean-V >= threshold selects "sunny" (primary); below selects "overcast" (alt).
+constexpr bool VISION_LIGHTING_ADAPTIVE_ENABLED = true;
+
+// tunable implementation default
+constexpr uint8_t VISION_LIGHTING_V_SUNNY_MIN = 115;
+
+// Minimum interval between lighting mode flips (anti-flicker hysteresis).
+constexpr uint32_t VISION_LIGHTING_HYSTERESIS_MS = 2000UL;
 
 
 // ============================================================================

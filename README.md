@@ -99,7 +99,7 @@ Run the unit tests on a host computer (Windows, Linux, or macOS) using standard 
 
 ```bash
 cd robofest_drone
-g++ -std=c++17 -Wall -Wextra -I./src -I./hal -I./config tests/*.cpp src/geofence.cpp src/path_planner.cpp src/mine_map.cpp src/command_layer.cpp src/telemetry.cpp hal/*.cpp -o robofest_unit_tests.exe
+g++ -std=c++17 -Wall -Wextra -I./src -I./hal -I./config tests/*.cpp src/vision_pipeline.cpp src/geofence.cpp src/path_planner.cpp src/mine_map.cpp src/command_layer.cpp src/telemetry.cpp src/calibration/hsv_tuner.cpp hal/*.cpp -o robofest_unit_tests.exe
 ./robofest_unit_tests.exe
 ```
 

@@ -145,8 +145,17 @@ enum class GeofenceStatus : uint8_t {
 
 enum class VisionMarkerType : uint8_t {
     UNKNOWN = 0,
-    ON_GROUND_MINE,
-    BURIED_SURFACE_MARKER
+    ON_GROUND_MINE = 1,        // legacy semantic: red circular on-ground mine
+    BURIED_SURFACE_MARKER = 2, // legacy semantic: yellow circular buried marker
+    // Generic color-coded marker identities (values are wire-format in swarm packets)
+    MARKER_ORANGE = 3,
+    MARKER_GREEN = 4,
+    MARKER_CYAN = 5,
+    MARKER_BLUE = 6,
+    MARKER_PURPLE = 7,
+    MARKER_PINK = 8,
+    MARKER_WHITE = 9,
+    MARKER_BLACK = 10
 };
 
 enum class FcCommand : uint8_t {
@@ -242,6 +251,9 @@ struct VisionCandidate {
     float circularity = 0.0f;
     float area = 0.0f;
     float normalized_area_score = 0.0f;
+    float extent = 0.0f;
+    float solidity = 0.0f;
+    uint8_t corner_count = 0;
     uint16_t persistence_count = 0;
     VisionMarkerType marker_type = VisionMarkerType::UNKNOWN;
     uint32_t frame_id = 0;

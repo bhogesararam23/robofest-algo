@@ -112,6 +112,10 @@ constexpr uint16_t TE_VISION_PROCESSING_SLOW                 = 2216;
 constexpr uint16_t TE_VISION_UNSUPPORTED_PIXEL_FORMAT         = 2217;
 constexpr uint16_t TE_VISION_BLOB_EXCEEDED_SCAN_BUFFER        = 2218;
 constexpr uint16_t TE_VISION_MORPHOLOGY_APPLIED               = 2219;
+constexpr uint16_t TE_VISION_BLOB_REJECTED_SHAPE             = 2220;
+constexpr uint16_t TE_VISION_LIGHTING_MODE_CHANGED           = 2221;
+constexpr uint16_t TE_VISION_EXPOSURE_METRIC                 = 2222;
+constexpr uint16_t TE_VISION_PROFILE_TABLE_LOADED            = 2223;
 
 constexpr uint16_t TE_FRAME_ACQUIRED                         = 2201;
 constexpr uint16_t TE_FRAME_DROPPED                          = 2202;
