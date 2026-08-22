@@ -116,3 +116,19 @@ Keys: `[1..0]` select profile | `[ / ] / P` cycle profiles | `[A]` enable/disabl
 
 The exported header overrides the built-in table in `config/vision_profiles.h`
 (delete it to fall back). HSV scale matches firmware directly: H 0-180, S/V 0-255.
+
+## Universal Color + Shape Detector (`cv_universal.py`)
+
+Full hue-wheel color detection (11 buckets incl. black/white/gray) plus
+corner-count-driven shape classification (triangle..octagon, circle, star).
+No per-color/per-shape hand tuning needed:
+
+```
+python cv_universal.py --selftest          # synthetic 11x7 ground-truth check
+python cv_universal.py --image photo.png --out labeled.png
+python cv_universal.py --camera            # live webcam, exposure norm ON
+python cv_universal.py --camera 1 --no-norm
+```
+
+`--selftest` exits non-zero if any label is wrong; keep it green after any
+threshold change (`CORNER_EPSILON_RATIO` validated window: 0.03-0.05).
