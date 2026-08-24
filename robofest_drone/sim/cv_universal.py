@@ -287,14 +287,52 @@ def run(image_path, out_path, min_area, max_area):
     return results
 
 
-def run_camera(camera_index, min_area, max_area, width=640, height=480,
+def resolve_video_source(source):
+    """Map a user-supplied --camera value to an OpenCV capture target.
+
+    Supported forms (REQ item 1, laptop-side ingestion):
+      "0", "1", ...          local USB webcam index
+      "rtsp://..."           IP camera RTSP stream
+      "http://.../video"     MJPEG over HTTP (IP cam or app)
+      "droidcam://IP[:PORT]" DroidCam phone app (default port 4747 -> /video)
+    """
+    if isinstance(source, str) and source.startswith("droidcam://"):
+        rest = source[len("droidcam://"):]
+        if ":" not in rest:
+            rest += ":4747"
+        return f"http://{rest}/video"
+    if isinstance(source, str) and source.isdigit():
+        return int(source)
+    return source
+
+
+def open_video_capture(source):
+    """Open any supported source with a Windows-friendly fallback chain."""
+    cap = None
+    if isinstance(source, int):
+        try:
+            cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+            if not cap.isOpened() or not cap.read()[0]:
+                cap.release()
+                cap = cv2.VideoCapture(source)
+        except Exception:
+            cap = cv2.VideoCapture(source)
+    else:
+        cap = cv2.VideoCapture(source)  # file / rtsp / http-mjpeg
+    return cap
+
+
+def run_camera(camera_source, min_area, max_area, width=640, height=480,
                normalize=True):
     import time
-    cap = cv2.VideoCapture(camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    camera_source = resolve_video_source(camera_source)
+
+    cap = open_video_capture(camera_source)
+    if isinstance(camera_source, int):
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
     if not cap.isOpened():
-        raise SystemExit(f"Could not open camera index {camera_index}")
+        raise SystemExit(f"Could not open camera source '{camera_source}'")
 
     print("[CV_UNIVERSAL] Live camera mode - press Q or ESC to quit.")
     fps_avg = 0.0
@@ -484,8 +522,9 @@ def main():
         description="Universal full-hue-wheel color + corner-count shape detector")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--image", help="Path to a static image file.")
-    src.add_argument("--camera", type=int, nargs="?", const=0,
-                     help="Live webcam mode. Optional camera index (default 0).")
+    src.add_argument("--camera", type=str, nargs="?", const="0",
+                     help="Live source: USB index (0,1), rtsp:// IP cam, http MJPEG URL, "
+                          "or droidcam://IP[:PORT] (default port 4747).")
     ap.add_argument("--selftest", action="store_true",
                     help="Run the synthetic ground-truth validation and exit.")
     ap.add_argument("--out", default="universal_result.png",
