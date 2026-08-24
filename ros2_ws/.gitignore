@@ -1,0 +1,8 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+*.pyc
+__pycache__/
+.pytest_cache/
+clearance_report.json

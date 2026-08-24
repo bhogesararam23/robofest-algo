@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>robofest_navigation</name><version>0.1.0</version>
+  <description>Mine mapping, localization configuration, and A* safe-path planning.</description>
+  <maintainer email="team@robofest.local">RoboFest Team</maintainer><license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rclpy</depend><depend>std_msgs</depend><depend>geometry_msgs</depend><depend>nav_msgs</depend><depend>sensor_msgs</depend><depend>robofest_interfaces</depend>
+  <exec_depend>robot_localization</exec_depend>
+</package>

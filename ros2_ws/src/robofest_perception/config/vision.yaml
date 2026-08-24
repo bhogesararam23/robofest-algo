@@ -1,0 +1,7 @@
+vision_pipeline:
+  ros__parameters:
+    lower_hsv: [20, 80, 80]
+    upper_hsv: [40, 255, 255]
+    min_area_px: 50.0
+    min_circularity: 0.35
+    focal_length_px: 420.0

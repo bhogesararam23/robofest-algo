@@ -1,0 +1,7 @@
+string command
+---
+bool success
+string final_status
+---
+string current_state
+float32 progress_percent

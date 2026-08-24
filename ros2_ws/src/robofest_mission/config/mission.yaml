@@ -1,0 +1,9 @@
+mission:
+  ros__parameters:
+    arena_width_m: 60.0
+    arena_height_m: 15.0
+    exit_x_m: 59.0
+    exit_y_m: 7.5
+    safety_clearance_m: 1.0
+    human_deviation_m: 1.5
+    drone_id: 1

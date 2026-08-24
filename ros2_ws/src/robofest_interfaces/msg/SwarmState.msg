@@ -1,0 +1,5 @@
+uint8 drone_id
+float32 battery_percent
+string current_task
+bool is_available
+robofest_interfaces/MineMap local_map
