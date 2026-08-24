@@ -7,6 +7,9 @@
 #include "../config/thresholds.h"
 #include "../config/vision_profiles.h"
 #include "../hal/hal_camera.h"
+#include "frame_adapter.h"
+#include "vision_geom.h"
+#include "profile_store.h"
 
 namespace RobofestDrone {
 
@@ -72,6 +75,10 @@ struct VisionBlob {
     uint8_t corner_count = 0;  // DP vertices on hull polyline (0 = not computed)
     Types::VisionMarkerType profile_type = Types::VisionMarkerType::UNKNOWN;
     bool valid = false;
+    // Phase 3 additions (items 7/8):
+    float concavity_depth = -1.0f;  // >0.25 indicates star/cross-like concavity
+    uint8_t contour_corner_count = 0; // corners from raw traced contour
+    float shadow_ratio = 0.0f;        // fraction of shadow-flagged px in bbox
 };
 
 struct VisionPersistenceTrack {
@@ -104,11 +111,6 @@ enum class VisionLightingMode : uint8_t {
 // ============================================================================
 // TESTABLE DESCRIPTOR / SCORING HELPERS (free functions, no pipeline state)
 // ============================================================================
-
-struct VisionPoint {
-    float x = 0.0f;
-    float y = 0.0f;
-};
 
 bool vision_hsv_in_band(
     uint8_t h, uint8_t s, uint8_t v,
@@ -183,6 +185,17 @@ public:
     float getLastFrameMeanV() const { return frame_mean_v_; }
     float getLastExposureGain() const { return exposure_gain_; }
 
+    // Night/low-light operation (REQ-DER-115): auto-engaged by the pipeline
+    // from frame mean-V with hysteresis; isNightModeActive() reports state.
+    bool isNightModeActive() const { return night_active_; }
+    float getLastHazeSeverity() const { return last_haze_severity_; }
+    uint16_t getLastShadowPixelCount() const { return last_shadow_pixels_; }
+
+    // Profile persistence (REQ-DER-106): CRC-checked save/load of calibrated
+    // bands to flash; load falls back to defaults on MISSING/CORRUPT.
+    bool saveCalibratedProfiles();
+    ProfileStoreStatus loadCalibratedProfiles();
+
     bool isHealthy() const { return camera_healthy_; }
     bool isFrameFresh(uint32_t now_ms) const;
 
@@ -233,6 +246,13 @@ private:
     float gain_r_ = 1.0f;
     float gain_g_ = 1.0f;
     float gain_b_ = 1.0f;
+
+    // Phase 3 state: enhancement chain (items 5/8/15)
+    bool night_active_ = false;
+    uint32_t last_night_switch_ms_ = 0;
+    float last_haze_severity_ = 0.0f;
+    uint16_t last_shadow_pixels_ = 0;
+    FrameTransform frame_tf_;
 
     Types::VisionCandidate candidates_[Config::VISION_MAX_CANDIDATES] = {};
     uint8_t candidate_count_ = 0;

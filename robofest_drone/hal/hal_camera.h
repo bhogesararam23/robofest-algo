@@ -71,5 +71,22 @@ void hal_camera_set_auto_whitebalance(bool enabled);
 // AE level bias; motion blur must be tolerated by caller-side gating.
 void hal_camera_set_night_mode(bool enabled);
 
+// ============================================================================
+// HOST-ONLY TEST SEAM (not compiled on target hardware)
+// ----------------------------------------------------------------------------
+// Injects a synthetic frame so unit tests can exercise the full CV pipeline
+// end-to-end through hal_camera_get_frame(). The buffer is borrowed, not
+// copied; it must remain valid until the next injection/clear call.
+// ============================================================================
+#if !defined(ARDUINO)
+bool hal_camera_inject_frame(
+    const uint8_t* data,
+    uint16_t width,
+    uint16_t height,
+    PixelFormat fmt,
+    uint32_t buffer_size);
+void hal_camera_clear_injection();
+#endif
+
 } // namespace Hal
 } // namespace RobofestDrone

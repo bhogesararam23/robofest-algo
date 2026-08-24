@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "savedAt": "2026-08-24T12:07:21.991Z",
+  "agents": [
+    {
+      "id": "god",
+      "name": "Michael",
+      "character": "michael",
+      "accent": "lemon",
+      "description": "god — runs the floor, triages requests, escalates only critical calls to you",
+      "project": "hive",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\OneDrive\\Desktop\\robofest algo",
+      "status": "idle",
+      "action": "running the floor",
+      "progress": 0,
+      "currentStation": "desk",
+      "ptyId": "pty-god",
+      "command": "opencode --model claude-opus-4-8",
+      "provider": "opencode",
+      "model": "claude-opus-4-8",
+      "isGod": true
+    }
+  ],
+  "archived": [],
+  "restorable": [],
+  "queues": {},
+  "selectedId": "god"
+}

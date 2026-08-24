@@ -258,6 +258,13 @@ namespace {
     uint16_t s_stub_w = 320;
     uint16_t s_stub_h = 240;
     uint32_t s_last_frame_ms = 0;
+
+    // Host-only injection state (unit-test seam).
+    const uint8_t* s_inject_data = nullptr;
+    uint16_t s_inject_w = 0;
+    uint16_t s_inject_h = 0;
+    PixelFormat s_inject_fmt = PixelFormat::PIXEL_FORMAT_UNKNOWN;
+    uint32_t s_inject_size = 0;
 }
 
 bool hal_camera_init() {
@@ -285,6 +292,17 @@ bool hal_camera_get_frame(CameraFrame& frame) {
         return false;
     }
     s_last_frame_ms = hal_millis();
+
+    if (s_inject_data != nullptr && s_inject_w > 0 && s_inject_h > 0) {
+        frame.width = s_inject_w;
+        frame.height = s_inject_h;
+        frame.timestamp_ms = s_last_frame_ms;
+        frame.format = s_inject_fmt;
+        frame.buffer_size = s_inject_size;
+        frame.data = const_cast<uint8_t*>(s_inject_data);
+        return true;
+    }
+
     frame.width = s_stub_w;
     frame.height = s_stub_h;
     frame.timestamp_ms = s_last_frame_ms;
@@ -333,6 +351,33 @@ void hal_camera_set_night_mode(bool enabled) {
     std::snprintf(buf, sizeof(buf), "[HAL_CAMERA] Night mode %s (stub)",
                   enabled ? "ON" : "OFF");
     hal_log(buf);
+}
+
+bool hal_camera_inject_frame(
+    const uint8_t* data,
+    uint16_t width,
+    uint16_t height,
+    PixelFormat fmt,
+    uint32_t buffer_size) {
+    if (!s_camera_initialized) hal_camera_init();
+    if (data == nullptr || width == 0 || height == 0) {
+        s_inject_data = nullptr;
+        return false;
+    }
+    s_inject_data = data;
+    s_inject_w = width;
+    s_inject_h = height;
+    s_inject_fmt = fmt;
+    s_inject_size = buffer_size;
+    return true;
+}
+
+void hal_camera_clear_injection() {
+    s_inject_data = nullptr;
+    s_inject_w = 0;
+    s_inject_h = 0;
+    s_inject_fmt = PixelFormat::PIXEL_FORMAT_UNKNOWN;
+    s_inject_size = 0;
 }
 
 #endif // ARDUINO

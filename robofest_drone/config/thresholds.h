@@ -202,6 +202,27 @@ constexpr float GLARE_AREA_MAX_PX = 5000.0f;
 // tunable implementation default
 constexpr bool VISION_DOWNSCALE_ENABLED = true;
 
+// --- Phase 3 enhancement chain additions (complements ITEM 8/15 blocks
+// further below; REQ-DER-108/115 + dehazing) ---
+
+// Gamma applied to the working buffer while in night mode (<1 brightens).
+constexpr float VISION_NIGHT_GAMMA = 0.65f;
+
+// Exit threshold for night mode (must exceed VISION_NIGHT_MEAN_V_MAX).
+constexpr uint8_t VISION_NIGHT_MEAN_V_EXIT = 78;
+
+// Dehazing engages above this severity (0..1, from dark-channel estimate).
+constexpr float VISION_DEHAZE_SEVERITY_MIN = 0.45f;
+
+// Confidence penalty (0..100 scale) for blobs dominated by shadow-flagged px.
+constexpr float VISION_SHADOW_PENALTY_CONF = 12.0f;
+
+// Minimum blob area (native px) before contour tracing runs (item 7 cost gate).
+constexpr uint16_t VISION_CONTOUR_MIN_BLOB_AREA_PX = 48;
+
+// Turn-angle threshold for contour-based corner counting (degrees).
+constexpr float VISION_CONTOUR_CORNER_ANGLE_DEG = 35.0f;
+
 // tunable implementation default
 constexpr bool VISION_ATTITUDE_COMPENSATION_ENABLED = true;
 
@@ -282,6 +303,84 @@ constexpr float CONF_CIRC_PERFECT_AT = 0.85f;
 // Soft falloff margin for descriptor gates: outside [min,max] the score decays
 // linearly over this fraction of the gate span before reaching zero.
 constexpr float CONF_GATE_SOFT_MARGIN_RATIO = 0.25f;
+
+
+// ============================================================================
+// CONCAVE / COMPLEX SHAPE CLASSIFICATION (ITEM 7, REQ-DER-107)
+// ============================================================================
+
+// Ordered contour tracing on the raw blob boundary (preserves concavities).
+constexpr bool VISION_CONTOUR_TRACE_ENABLED = true;
+
+// Contour vertices kept per traced boundary (bounded static scratch).
+constexpr uint16_t VISION_CONTOUR_POINTS_MAX = 512;
+
+// A concavity counts as a defect when deeper than this ratio of the bbox
+// diagonal, and star/concave classification needs at least this many defects.
+constexpr float SHAPE_DEFECT_DEPTH_MIN_RATIO = 0.07f;
+constexpr uint8_t SHAPE_STAR_MIN_DEFECTS = 3;
+
+constexpr float SHAPE_STAR_SOLIDITY_MAX = 0.80f;
+constexpr float SHAPE_LINE_ASPECT_MIN = 3.5f;
+constexpr float SHAPE_CIRCLE_CIRCULARITY_MIN = 0.82f;
+constexpr float SHAPE_POLY_SOLIDITY_MIN = 0.85f;
+
+
+// ============================================================================
+// ADVANCED LIGHTING PREPROCESSING (ITEM 8, REQ-DER-108)
+// ============================================================================
+
+// Tile-based contrast-limited histogram equalization on the V channel,
+// applied after exposure normalization and before HSV segmentation.
+constexpr bool VISION_CLAHE_ENABLED = true;
+
+// Clip limit expressed as a multiple of the uniform-histogram level.
+constexpr uint8_t VISION_CLAHE_CLIP_LIMIT = 4;
+
+// Tile grid is chosen so each tile is roughly this many process-pixels wide.
+constexpr uint8_t VISION_CLAHE_TILE_TARGET_PX = 40;
+
+// Gray-world white balance applied to the adapted RGB working buffer.
+constexpr bool VISION_AWB_GRAY_WORLD_ENABLED = true;
+constexpr float VISION_AWB_STRENGTH = 0.6f;
+
+// Chromaticity-based shadow detection: a dark pixel whose saturation stays
+// below S_MAX while its value collapses under the local mean is classified a
+// physical shadow rather than a dark object. Used to gate the BLACK profile
+// so ground shadows stop registering as black markers.
+constexpr bool VISION_SHADOW_GATING_ENABLED = true;
+constexpr uint8_t VISION_SHADOW_V_RATIO_PCT = 55;
+constexpr uint8_t VISION_SHADOW_S_MAX = 90;
+
+// ============================================================================
+// NIGHT / LOW-LIGHT OPERATION (ITEM 15, REQ-DER-115)
+// ============================================================================
+
+// Temporal exponential blend applied to the adapted frame: new frame weight =
+// NUM/DEN (e.g. 1/4). Suppresses heavy low-shutter sensor noise.
+constexpr bool VISION_NIGHT_TEMPORAL_BLEND = true;
+constexpr uint8_t VISION_NIGHT_BLEND_NUM = 1;
+constexpr uint8_t VISION_NIGHT_BLEND_DEN = 4;
+
+// Threshold relaxation multipliers engaged while night mode is active:
+// sensor noise raises the false-positive floor, so the reporting bar and
+// circularity gate are eased instead of missing real markers.
+constexpr float NIGHT_CONFIDENCE_REPORT_SCALE = 0.85f;
+constexpr float NIGHT_CIRCULARITY_BIAS = -0.05f;
+
+// Mean-V below this engages night mode automatically (hysteresis shared with
+// the sunny/overcast selector).
+constexpr uint8_t VISION_NIGHT_MEAN_V_MAX = 60;
+
+
+// ============================================================================
+// FRAME ADAPTER (ITEM 5, REQ-DER-105)
+// ============================================================================
+
+// Route every camera frame through aspect-correct conversion + bilinear
+// resize into the working grid before segmentation. When disabled or on
+// allocation failure the legacy strided-sampling path is used unchanged.
+constexpr bool VISION_FRAME_ADAPTER_ENABLED = true;
 
 
 // ============================================================================

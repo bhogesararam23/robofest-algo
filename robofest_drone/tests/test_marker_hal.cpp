@@ -110,3 +110,53 @@ TEST(marker_hal, guidance_index_mapping_and_clamping) {
     ASSERT_TRUE(Hal::hal_marker_guidance_index(-45.0f) <
                 Hal::hal_marker_guidance_index(45.0f));
 }
+
+// ============================================================================
+// REQ-DER-104 closeout: determinism, liveness, and full-pattern coverage so
+// the render table is provably total before hardware bring-up.
+// ============================================================================
+
+TEST(marker_hal, render_is_deterministic) {
+    const MarkerPattern all[] = {
+        MarkerPattern::MARKER_OFF,     MarkerPattern::MARKER_FORWARD,
+        MarkerPattern::MARKER_STOP,    MarkerPattern::MARKER_LEFT,
+        MarkerPattern::MARKER_RIGHT,   MarkerPattern::MARKER_SAFE_PATH,
+        MarkerPattern::MARKER_EMERGENCY, MarkerPattern::MARKER_MISSION_COMPLETE,
+        MarkerPattern::MARKER_CAUTION, MarkerPattern::MARKER_REJOIN_LEFT,
+        MarkerPattern::MARKER_REJOIN_RIGHT, MarkerPattern::MARKER_LANDING};
+    for (MarkerPattern p : all) {
+        for (int phase = 0; phase <= 255; phase += 37) {
+            uint8_t a[3], b[3];
+            rgb_at(p, static_cast<uint8_t>(phase % Hal::MARKER_LED_COUNT),
+                   static_cast<uint8_t>(phase), 7, a);
+            rgb_at(p, static_cast<uint8_t>(phase % Hal::MARKER_LED_COUNT),
+                   static_cast<uint8_t>(phase), 7, b);
+            ASSERT_EQ(a[0], b[0]);
+            ASSERT_EQ(a[1], b[1]);
+            ASSERT_EQ(a[2], b[2]);
+        }
+    }
+}
+
+TEST(marker_hal, every_pattern_has_a_lit_state_somewhere) {
+    // Liveness: no pattern may render fully dark across all LEDs/phases
+    // (OFF excluded by definition).
+    const MarkerPattern live[] = {
+        MarkerPattern::MARKER_FORWARD, MarkerPattern::MARKER_STOP,
+        MarkerPattern::MARKER_LEFT,    MarkerPattern::MARKER_RIGHT,
+        MarkerPattern::MARKER_SAFE_PATH, MarkerPattern::MARKER_EMERGENCY,
+        MarkerPattern::MARKER_MISSION_COMPLETE, MarkerPattern::MARKER_CAUTION,
+        MarkerPattern::MARKER_REJOIN_LEFT, MarkerPattern::MARKER_REJOIN_RIGHT,
+        MarkerPattern::MARKER_LANDING};
+    for (MarkerPattern p : live) {
+        bool any_lit = false;
+        for (uint8_t idx = 0; idx < Hal::MARKER_LED_COUNT && !any_lit; ++idx) {
+            for (int phase = 0; phase <= 255 && !any_lit; ++phase) {
+                uint8_t rgb[3];
+                rgb_at(p, idx, static_cast<uint8_t>(phase), 8, rgb);
+                if (rgb[0] > 0 || rgb[1] > 0 || rgb[2] > 0) any_lit = true;
+            }
+        }
+        ASSERT_TRUE(any_lit);
+    }
+}

@@ -1,5 +1,7 @@
 #include "vision_pipeline.h"
 #include "mem.h"
+#include "image_enhance.h"
+#include "shape_analysis.h"
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -23,8 +25,12 @@ namespace {
     static uint8_t* s_binary_mask = nullptr;      // [W*H]
     static uint8_t* s_morph_temp = nullptr;       // [W*H]
     static uint8_t* s_label_snapshot = nullptr;   // [W*H]
+    static uint8_t* s_sep_tmp = nullptr;          // [W*H] separable morphology row pass
+    static uint8_t* s_shadow_flags = nullptr;     // [W*H] shadow-suspect mask (item 8)
     static uint16_t* s_bfs_x = nullptr;           // [W*H] BFS queue X
     static uint16_t* s_bfs_y = nullptr;           // [W*H] BFS queue Y
+    static uint8_t* s_work_rgb = nullptr;         // [W*H*3] adapted working frame
+    static uint8_t* s_night_prev = nullptr;       // [W*H*3] temporal-blend history
 
     // Returns false if any buffer could not be allocated (OOM).
     static bool ensure_vision_scratch() {
@@ -40,15 +46,31 @@ namespace {
         if (s_label_snapshot == nullptr) {
             s_label_snapshot = static_cast<uint8_t*>(robofest_big_alloc(N));
         }
+        if (s_sep_tmp == nullptr) {
+            s_sep_tmp = static_cast<uint8_t*>(robofest_big_alloc(N));
+        }
+        if (s_shadow_flags == nullptr) {
+            s_shadow_flags = static_cast<uint8_t*>(robofest_big_alloc(N));
+        }
         if (s_bfs_x == nullptr) {
             s_bfs_x = static_cast<uint16_t*>(robofest_big_alloc(N * sizeof(uint16_t)));
         }
         if (s_bfs_y == nullptr) {
             s_bfs_y = static_cast<uint16_t*>(robofest_big_alloc(N * sizeof(uint16_t)));
         }
+        if (s_work_rgb == nullptr) {
+            s_work_rgb = static_cast<uint8_t*>(robofest_big_alloc(N * 3));
+        }
+        if (s_night_prev == nullptr) {
+            s_night_prev = static_cast<uint8_t*>(robofest_big_alloc(N * 3));
+        }
         return s_binary_mask != nullptr && s_morph_temp != nullptr &&
-               s_label_snapshot != nullptr && s_bfs_x != nullptr && s_bfs_y != nullptr;
+               s_label_snapshot != nullptr && s_sep_tmp != nullptr &&
+               s_shadow_flags != nullptr &&
+               s_bfs_x != nullptr && s_bfs_y != nullptr &&
+               s_work_rgb != nullptr && s_night_prev != nullptr;
     }
+
     static VisionBlob s_extracted_blobs[Config::VISION_MAX_BLOBS];
 
     // Boundary-pixel collection during BFS (subsampled on overflow) plus the
@@ -644,10 +666,11 @@ void VisionPipeline::segmentMultiLabelMask(const Hal::CameraFrame& frame) {
             uint8_t r = 0, g = 0, b = 0;
             if (!fetch_rgb(frame, src_x, src_y, r, g, b)) continue;
 
-            // Optional 3x3 box blur: average the pixel with its neighbors to smooth
-            // single-pixel sensor noise before HSV conversion. Only applies when
-            // blur is enabled AND the pixel is not at the frame boundary.
+            // Optional 3x3 box blur only for raw RGB565 sources: the adapter's
+            // bilinear resample already suppresses single-pixel sensor noise
+            // on the adapted working buffer.
             if (Config::VISION_BLUR_ENABLED &&
+                frame.format == Hal::PixelFormat::PIXEL_FORMAT_RGB565 &&
                 src_x > 0 && src_y > 0 &&
                 src_x < (frame.width - 1) && src_y < (frame.height - 1)) {
                 uint32_t sum_r = r, sum_g = g, sum_b = b;
@@ -749,10 +772,12 @@ void VisionPipeline::applyMorphologyCleanup() {
 
     const uint16_t W = Config::VISION_PROCESS_WIDTH;
     const uint16_t H = Config::VISION_PROCESS_HEIGHT;
-    const uint8_t R = Config::VISION_MORPHOLOGY_RADIUS;
+    const uint8_t R = std::min<uint8_t>(Config::VISION_MORPHOLOGY_RADIUS, 4);
+    constexpr uint8_t SRC = 0; // s_morph_temp slot
+    (void)SRC;
 
-    std::memcpy(s_label_snapshot, s_binary_mask, W * H);
-    std::memset(s_binary_mask, 0, W * H);
+    std::memcpy(s_label_snapshot, s_binary_mask, static_cast<size_t>(W) * H);
+    std::memset(s_binary_mask, 0, static_cast<size_t>(W) * H);
 
     for (uint8_t pi = 0; pi < profile_count_; ++pi) {
         if (!(labels_present_bits_ & (1UL << pi))) continue;
@@ -765,50 +790,81 @@ void VisionPipeline::applyMorphologyCleanup() {
             s_morph_temp[idx] = (s_label_snapshot[idx] == label) ? 1 : 0;
         }
 
-        // Pass 1: Erosion — pixel stays ON only if ALL neighbors within radius are ON.
-        for (uint16_t y = 0; y < H; ++y) {
+        // ------------------------------------------------------------
+        // SEPARABLE EROSION (item 9 / REQ-DER-109): square kernel with
+        // radius R decomposes into a horizontal pass then a vertical pass.
+        // Binary data => window min == "window sum equals window size".
+        // Complexity drops from O(W*H*(2R+1)^2) to O(W*H*2*(2R+1)).
+        // Out-of-bounds counts as background (matches previous semantics).
+        // ------------------------------------------------------------
+        {
+            // Horizontal pass: s_morph_temp -> s_sep_tmp
+            for (uint16_t y = 0; y < H; ++y) {
+                const uint8_t* row_in = s_morph_temp + static_cast<size_t>(y) * W;
+                uint8_t* row_out = s_sep_tmp + static_cast<size_t>(y) * W;
+                for (uint16_t x = 0; x < W; ++x) {
+                    int lo = static_cast<int>(x) - R;
+                    int hi = static_cast<int>(x) + R;
+                    if (lo < 0) lo = 0;
+                    if (hi >= W) hi = W - 1;
+                    const int span = hi - lo + 1;
+                    uint32_t sum = 0;
+                    for (int k = lo; k <= hi; ++k) sum += row_in[k];
+                    row_out[x] = (sum == static_cast<uint32_t>(span)) ? 1u : 0u;
+                }
+            }
+            // Vertical pass: s_sep_tmp -> s_binary_mask
             for (uint16_t x = 0; x < W; ++x) {
-                uint32_t idx = y * W + x;
-                if (s_morph_temp[idx] == 0) {
-                    s_binary_mask[idx] = 0;
-                    continue;
-                }
-                bool all_set = true;
-                for (int16_t dy = -R; dy <= R && all_set; ++dy) {
-                    for (int16_t dx = -R; dx <= R && all_set; ++dx) {
-                        int16_t nx = static_cast<int16_t>(x) + dx;
-                        int16_t ny = static_cast<int16_t>(y) + dy;
-                        if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
-                            all_set = false;
-                        } else if (s_morph_temp[ny * W + nx] == 0) {
-                            all_set = false;
-                        }
+                for (uint16_t y = 0; y < H; ++y) {
+                    int lo = static_cast<int>(y) - R;
+                    int hi = static_cast<int>(y) + R;
+                    if (lo < 0) lo = 0;
+                    if (hi >= H) hi = H - 1;
+                    const int span = hi - lo + 1;
+                    uint32_t sum = 0;
+                    for (int k = lo; k <= hi; ++k) {
+                        sum += s_sep_tmp[static_cast<size_t>(k) * W + x];
                     }
+                    s_binary_mask[static_cast<size_t>(y) * W + x] =
+                        (sum == static_cast<uint32_t>(span)) ? 1u : 0u;
                 }
-                s_binary_mask[idx] = all_set ? 1 : 0;
             }
         }
 
-        // Pass 2: Dilation — pixel turns ON if ANY neighbor within radius is ON.
-        std::memcpy(s_morph_temp, s_binary_mask, W * H);
-        for (uint16_t y = 0; y < H; ++y) {
-            for (uint16_t x = 0; x < W; ++x) {
-                uint32_t idx = y * W + x;
-                if (s_morph_temp[idx] != 0) continue;
-                bool any_set = false;
-                for (int16_t dy = -R; dy <= R && !any_set; ++dy) {
-                    for (int16_t dx = -R; dx <= R && !any_set; ++dx) {
-                        int16_t nx = static_cast<int16_t>(x) + dx;
-                        int16_t ny = static_cast<int16_t>(y) + dy;
-                        if (nx >= 0 && nx < W && ny >= 0 && ny < H) {
-                            if (s_morph_temp[ny * W + nx] != 0) {
-                                any_set = true;
-                            }
-                        }
+        // ------------------------------------------------------------
+        // SEPARABLE DILATION: same two-pass structure, max semantics
+        // ("any set within radius"). Out-of-bounds stays background.
+        // ------------------------------------------------------------
+        {
+            std::memcpy(s_morph_temp, s_binary_mask, static_cast<size_t>(W) * H);
+            // Horizontal pass: s_morph_temp -> s_sep_tmp
+            for (uint16_t y = 0; y < H; ++y) {
+                const uint8_t* row_in = s_morph_temp + static_cast<size_t>(y) * W;
+                uint8_t* row_out = s_sep_tmp + static_cast<size_t>(y) * W;
+                for (uint16_t x = 0; x < W; ++x) {
+                    int lo = static_cast<int>(x) - R;
+                    int hi = static_cast<int>(x) + R;
+                    if (lo < 0) lo = 0;
+                    if (hi >= W) hi = W - 1;
+                    uint8_t any_set = 0;
+                    for (int k = lo; k <= hi && !any_set; ++k) {
+                        any_set |= row_in[k];
                     }
+                    row_out[x] = any_set ? 1u : 0u;
                 }
-                if (any_set) {
-                    s_binary_mask[idx] = 1;
+            }
+            // Vertical pass: s_sep_tmp -> s_binary_mask
+            for (uint16_t x = 0; x < W; ++x) {
+                for (uint16_t y = 0; y < H; ++y) {
+                    int lo = static_cast<int>(y) - R;
+                    int hi = static_cast<int>(y) + R;
+                    if (lo < 0) lo = 0;
+                    if (hi >= H) hi = H - 1;
+                    uint8_t any_set = 0;
+                    for (int k = lo; k <= hi && !any_set; ++k) {
+                        any_set |= s_sep_tmp[static_cast<size_t>(k) * W + x];
+                    }
+                    s_binary_mask[static_cast<size_t>(y) * W + x] = any_set ? 1u : 0u;
                 }
             }
         }
@@ -835,8 +891,29 @@ uint8_t VisionPipeline::extractBlobs() {
     // Reuse the morphology snapshot buffer as the "claimed" map for this scan.
     std::memset(s_label_snapshot, 0, W * H);
 
-    float scale_x = static_cast<float>(Config::IMAGE_WIDTH) / static_cast<float>(W);
-    float scale_y = static_cast<float>(Config::IMAGE_HEIGHT) / static_cast<float>(H);
+    // Process->native coordinate mapping from the frame adapter (item 5).
+    // Falls back to the legacy uniform-scale convention when no adaptation ran.
+    const bool have_tf =
+        frame_tf_.valid && frame_tf_.scale > 0.00001f;
+    auto map_x = [&](float px) -> float {
+        return have_tf
+            ? (px - static_cast<float>(frame_tf_.pad_x)) / frame_tf_.scale
+            : px * (static_cast<float>(Config::IMAGE_WIDTH) / W);
+    };
+    auto map_y = [&](float py) -> float {
+        return have_tf
+            ? (py - static_cast<float>(frame_tf_.pad_y)) / frame_tf_.scale
+            : py * (static_cast<float>(Config::IMAGE_HEIGHT) / H);
+    };
+    const float area_factor = have_tf
+        ? 1.0f / (frame_tf_.scale * frame_tf_.scale)
+        : (static_cast<float>(Config::IMAGE_WIDTH) * Config::IMAGE_HEIGHT) /
+          (static_cast<float>(W) * H);
+
+    // Contour-tracing scratch (item 7): shared across blobs, sized once.
+    static ContourPoint s_contour_pts[SHAPE_MAX_CONTOUR_PTS];
+    static float s_hull_fx[Config::VISION_HULL_POINTS_MAX];
+    static float s_hull_fy[Config::VISION_HULL_POINTS_MAX];
 
     for (uint16_t y = 0; y < H; ++y) {
         for (uint16_t x = 0; x < W; ++x) {
@@ -930,9 +1007,10 @@ uint8_t VisionPipeline::extractBlobs() {
                 return blob_count;
             }
 
-            float full_area = static_cast<float>(area) * (scale_x * scale_y);
+            float full_area = static_cast<float>(area) * area_factor;
             float full_perimeter = static_cast<float>(perimeter) *
-                std::sqrt((scale_x * scale_x + scale_y * scale_y) * 0.5f);
+                (have_tf ? (1.0f / frame_tf_.scale)
+                         : std::sqrt(area_factor));
 
             if (full_perimeter < 1.0f) full_perimeter = 1.0f;
 
@@ -952,15 +1030,16 @@ uint8_t VisionPipeline::extractBlobs() {
                 continue;
             }
 
-            if (circularity < profile.circularity_min) {
+            if (circularity < profile.circularity_min +
+                (night_active_ ? Config::NIGHT_CIRCULARITY_BIAS : 0.0f)) {
                 setTelemetryEvent(TE_VISION_BLOB_REJECTED_CIRCULARITY);
                 continue;
             }
 
-            float full_min_x = static_cast<float>(min_x) * scale_x;
-            float full_max_x = static_cast<float>(max_x) * scale_x;
-            float full_min_y = static_cast<float>(min_y) * scale_y;
-            float full_max_y = static_cast<float>(max_y) * scale_y;
+            float full_min_x = map_x(static_cast<float>(min_x));
+            float full_max_x = map_x(static_cast<float>(max_x) + 1.0f);
+            float full_min_y = map_y(static_cast<float>(min_y));
+            float full_max_y = map_y(static_cast<float>(max_y) + 1.0f);
 
             if (full_min_x <= Config::EDGE_REJECT_MARGIN_PX ||
                 full_max_x >= (Config::IMAGE_WIDTH - Config::EDGE_REJECT_MARGIN_PX) ||
@@ -1007,17 +1086,68 @@ uint8_t VisionPipeline::extractBlobs() {
                     float epsilon = Config::SHAPE_CORNER_EPSILON_RATIO * bbox_diag;
                     corners = vision_poly_corner_count(hull, hull_n, epsilon);
                 }
+                for (uint8_t hi = 0; hi < hull_n; ++hi) {
+                    s_hull_fx[hi] = hull[hi].x;
+                    s_hull_fy[hi] = hull[hi].y;
+                }
             }
 
+            // ---- Concavity-aware refinement (item 7 / REQ-DER-107): trace the
+            // RAW contour (concavities preserved), count corners on it, and
+            // measure concavity depth against the convex hull. ----
+            float concavity = -1.0f;
+            uint8_t contour_corners = 0;
+            if (full_area >= Config::VISION_CONTOUR_MIN_BLOB_AREA_PX && bnd_count >= 12) {
+                const uint16_t cn = shape_trace_boundary(
+                    s_binary_mask, W, H, label,
+                    min_x, min_y, max_x, max_y,
+                    s_contour_pts, SHAPE_MAX_CONTOUR_PTS);
+                if (cn >= 12 && hull_n >= 3) {
+                    contour_corners = shape_corner_count(
+                        s_contour_pts, cn, Config::VISION_CONTOUR_CORNER_ANGLE_DEG);
+                    concavity = shape_concavity_depth(
+                        s_contour_pts, cn, s_hull_fx, s_hull_fy, hull_n);
+                }
+            }
+
+            // Blend contour evidence into the shape match score:
+            //   star-like profiles reward deep concavity + many raw corners;
+            //   convex-gated profiles (high solidity floor) punish it.
             float shape_match_val = vision_shape_match(
                 aspect, extent, solidity, corners, profile);
+            if (concavity > 0.22f) {
+                const bool star_like_profile =
+                    profile.corners_max >= 6 || profile.solidity_min <= 0.60f;
+                if (star_like_profile &&
+                    (contour_corners > corners || corners == 0)) {
+                    // Boost toward pass: deep concavity corroborates complexity.
+                    const float bonus = std::min(concavity, 0.5f); // 0..0.5
+                    shape_match_val = std::max(shape_match_val, 0.55f + bonus);
+                } else if (!star_like_profile && profile.solidity_min >= 0.80f) {
+                    // Convex-gated marker eaten by bite marks -> distrust.
+                    shape_match_val *= 0.70f;
+                }
+            }
             if (shape_match_val < 0.30f) {
                 setTelemetryEvent(TE_VISION_BLOB_REJECTED_SHAPE);
             }
 
+            // ---- Shadow contamination estimate (item 8 / REQ-DER-108) ----
+            uint32_t sh_hits = 0;
+            uint32_t sh_total = 0;
+            for (uint16_t sy2 = min_y; sy2 <= max_y; sy2 += 2) {
+                for (uint16_t sx2 = min_x; sx2 <= max_x; sx2 += 2) {
+                    sh_total++;
+                    if (s_shadow_flags[sy2 * W + sx2]) sh_hits++;
+                }
+            }
+            const float shadow_ratio = (sh_total > 0)
+                ? static_cast<float>(sh_hits) / static_cast<float>(sh_total)
+                : 0.0f;
+
             VisionBlob& blob = s_extracted_blobs[blob_count];
-            blob.centroid_x = (static_cast<float>(sum_x) / static_cast<float>(area)) * scale_x;
-            blob.centroid_y = (static_cast<float>(sum_y) / static_cast<float>(area)) * scale_y;
+            blob.centroid_x = map_x((static_cast<float>(sum_x) / static_cast<float>(area)) + 0.5f);
+            blob.centroid_y = map_y((static_cast<float>(sum_y) / static_cast<float>(area)) + 0.5f);
             blob.area = full_area;
             blob.perimeter = full_perimeter;
             blob.circularity = circularity;
@@ -1029,6 +1159,9 @@ uint8_t VisionPipeline::extractBlobs() {
             blob.extent = extent;
             blob.solidity = solidity;
             blob.corner_count = corners;
+            blob.concavity_depth = concavity;
+            blob.contour_corner_count = contour_corners;
+            blob.shadow_ratio = shadow_ratio;
             blob.profile_type = profile.profile_type;
             blob.valid = true;
             blob_count++;
@@ -1177,7 +1310,22 @@ void VisionPipeline::updatePersistenceTracks(
 
         float confidence = vision_blob_confidence(blobs[b], *profile);
 
-        if (confidence < Config::CONFIDENCE_REPORT_MIN) {
+        // Shadow-contamination penalty (item 8): blobs sitting mostly inside
+        // detected physical shadows lose proportional confidence.
+        if (blobs[b].shadow_ratio > 0.0f) {
+            const float penalty =
+                Config::VISION_SHADOW_PENALTY_CONF *
+                std::min(1.0f, blobs[b].shadow_ratio * 2.0f);
+            confidence -= penalty;
+        }
+
+        // Night mode relaxes the reporting floor (item 15): sensor noise
+        // raises the false-positive bar, so we ease it instead of going blind.
+        const float report_min = night_active_
+            ? Config::CONFIDENCE_REPORT_MIN * Config::NIGHT_CONFIDENCE_REPORT_SCALE
+            : static_cast<float>(Config::CONFIDENCE_REPORT_MIN);
+
+        if (confidence < report_min) {
             continue;
         }
 
@@ -1299,8 +1447,8 @@ void VisionPipeline::update(
     // Prune stale tracks on a wall-clock basis, even when no frame is retrieved.
     pruneStaleTracks(now_ms);
 
-    Hal::CameraFrame frame;
-    if (!Hal::hal_camera_get_frame(frame)) {
+    Hal::CameraFrame raw_frame;
+    if (!Hal::hal_camera_get_frame(raw_frame)) {
         frame_timeout_count_++;
         if ((now_ms - last_frame_time_ms_) > Config::CAMERA_STALL_TIMEOUT_MS) {
             camera_healthy_ = false;
@@ -1315,9 +1463,128 @@ void VisionPipeline::update(
     camera_healthy_ = true;
     frame_count_++;
 
-    // Execute vision pipeline stages (all enabled profiles simultaneously)
-    measureExposureAndLighting(frame, now_ms);
-    segmentMultiLabelMask(frame);
+    // ------------------------------------------------------------------
+    // FRAME ADAPTER (item 5 / REQ-DER-105): convert + resize + letterbox
+    // the native frame into the process-resolution RGB888 working buffer.
+    // ------------------------------------------------------------------
+    bool adapted = false;
+    frame_tf_ = FrameTransform();
+    Hal::CameraFrame work_view; // view over s_work_rgb, valid when adapted
+
+    constexpr size_t WN =
+        static_cast<size_t>(Config::VISION_PROCESS_WIDTH) *
+        static_cast<size_t>(Config::VISION_PROCESS_HEIGHT);
+
+    if (raw_frame.data != nullptr && ensure_vision_scratch()) {
+        if (frame_adapter_convert(
+                raw_frame,
+                Config::VISION_PROCESS_WIDTH,
+                Config::VISION_PROCESS_HEIGHT,
+                downscale_enabled_,
+                s_work_rgb,
+                frame_tf_)) {
+            adapted = true;
+            work_view.width = Config::VISION_PROCESS_WIDTH;
+            work_view.height = Config::VISION_PROCESS_HEIGHT;
+            work_view.timestamp_ms = raw_frame.timestamp_ms;
+            work_view.format = Hal::PixelFormat::PIXEL_FORMAT_RGB888;
+            work_view.buffer_size =
+                static_cast<uint32_t>(WN * 3);
+            work_view.data = s_work_rgb;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // ENHANCEMENT CHAIN (items 8/15 + haze): runs only on real pixels.
+    // Order: night gamma -> CLAHE -> dehaze router -> shadow mask.
+    // ------------------------------------------------------------------
+    if (adapted) {
+        // Night-mode auto switch with hysteresis on the pre-enhanced mean V.
+        float quick_mean_v = 0.0f;
+        {
+            uint32_t v_sum = 0, samples = 0;
+            for (uint32_t p = 0; p < WN * 3; p += 3 * 8) { // every 8th pixel
+                const uint8_t r = s_work_rgb[p];
+                const uint8_t g = s_work_rgb[p + 1];
+                const uint8_t b = s_work_rgb[p + 2];
+                v_sum += std::max(r, std::max(g, b));
+                samples++;
+            }
+            quick_mean_v = samples ? static_cast<float>(v_sum) / samples : 128.0f;
+        }
+        const bool want_night = night_active_
+            ? (quick_mean_v < static_cast<float>(Config::VISION_NIGHT_MEAN_V_EXIT))
+            : (quick_mean_v < static_cast<float>(Config::VISION_NIGHT_MEAN_V_MAX));
+        if (want_night != night_active_ &&
+            (now_ms - last_night_switch_ms_) >= 1000UL) {
+            night_active_ = want_night;
+            last_night_switch_ms_ = now_ms;
+            Hal::hal_camera_set_night_mode(night_active_);
+            setTelemetryEvent(TE_VISION_LIGHTING_MODE_CHANGED);
+        }
+        if (night_active_) {
+            // Temporal blend suppresses heavy low-shutter sensor noise
+            // (item 15): out = (cur*NUM + prev*(DEN-NUM)) / DEN.
+            if (Config::VISION_NIGHT_TEMPORAL_BLEND &&
+                Config::VISION_NIGHT_BLEND_DEN > 0) {
+                const uint32_t den = Config::VISION_NIGHT_BLEND_DEN;
+                const uint32_t num = std::min<uint32_t>(
+                    static_cast<uint32_t>(Config::VISION_NIGHT_BLEND_NUM), den);
+                for (size_t i = 0; i < WN * 3; ++i) {
+                    const uint32_t blended =
+                        (static_cast<uint32_t>(s_work_rgb[i]) * num +
+                         static_cast<uint32_t>(s_night_prev[i]) * (den - num)) / den;
+                    s_work_rgb[i] = static_cast<uint8_t>(blended);
+                    s_night_prev[i] = s_work_rgb[i];
+                }
+            }
+            enhance_gamma(s_work_rgb, WN, Config::VISION_NIGHT_GAMMA);
+        } else {
+            // Keep the history buffer warm so re-entry into night mode starts
+            // from current content instead of stale darkness.
+            std::memcpy(s_night_prev, s_work_rgb, WN * 3);
+        }
+
+        if (Config::VISION_CLAHE_ENABLED) {
+            // Strength derived from the configured clip limit (4 -> ~0.6).
+            const float clahe_strength =
+                std::min(1.0f, static_cast<float>(Config::VISION_CLAHE_CLIP_LIMIT) / 6.5f);
+            enhance_clahe_v(s_work_rgb,
+                            Config::VISION_PROCESS_WIDTH,
+                            Config::VISION_PROCESS_HEIGHT,
+                            clahe_strength);
+        }
+
+        last_haze_severity_ =
+            enhance_haze_severity(s_work_rgb,
+                                  Config::VISION_PROCESS_WIDTH,
+                                  Config::VISION_PROCESS_HEIGHT);
+        if (last_haze_severity_ >= Config::VISION_DEHAZE_SEVERITY_MIN) {
+            enhance_dehaze(s_work_rgb,
+                           Config::VISION_PROCESS_WIDTH,
+                           Config::VISION_PROCESS_HEIGHT,
+                           std::min(1.0f, last_haze_severity_));
+        }
+
+        enhance_shadow_mask(s_work_rgb,
+                            Config::VISION_PROCESS_WIDTH,
+                            Config::VISION_PROCESS_HEIGHT,
+                            s_shadow_flags);
+        uint16_t shadow_count = 0;
+        for (size_t p = 0; p < WN; ++p) {
+            if (s_shadow_flags[p]) shadow_count++;
+        }
+        last_shadow_pixels_ = shadow_count;
+    } else {
+        std::memset(s_shadow_flags, 0, WN);
+        last_haze_severity_ = 0.0f;
+    }
+
+    // Execute vision pipeline stages (all enabled profiles simultaneously).
+    // Exposure metric and segmentation both consume the adapted buffer when
+    // available so gains are measured post-enhancement.
+    measureExposureAndLighting(adapted ? work_view : raw_frame, now_ms);
+    segmentMultiLabelMask(adapted ? work_view : raw_frame);
     applyMorphologyCleanup();
     uint8_t blob_count = extractBlobs();
     updatePersistenceTracks(s_extracted_blobs, blob_count, drone_pose, fused_altitude_m, attitude, now_ms);
@@ -1328,6 +1595,19 @@ void VisionPipeline::update(
     if (processing_duration_us_ > 20000UL) { // Over 20ms
         setTelemetryEvent(TE_VISION_PROCESSING_SLOW);
     }
+}
+
+
+// ============================================================================
+// PROFILE PERSISTENCE (REQ-DER-106)
+// ============================================================================
+
+bool VisionPipeline::saveCalibratedProfiles() {
+    return profile_store_save(*this) == ProfileStoreStatus::STORE_OK;
+}
+
+ProfileStoreStatus VisionPipeline::loadCalibratedProfiles() {
+    return profile_store_load(*this);
 }
 
 

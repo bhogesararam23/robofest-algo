@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "savedAt": "2026-08-24T12:54:51.867Z",
+  "agents": [
+    {
+      "id": "god",
+      "name": "Michael",
+      "character": "michael",
+      "accent": "lemon",
+      "description": "god — runs the floor, triages requests, escalates only critical calls to you",
+      "project": "hive",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\OneDrive\\Desktop\\robofest algo",
+      "status": "idle",
+      "action": "idle",
+      "progress": 0,
+      "currentStation": "desk",
+      "ptyId": "pty-god",
+      "command": "opencode --model claude-opus-4-8",
+      "provider": "opencode",
+      "model": "claude-opus-4-8",
+      "isGod": true
+    },
+    {
+      "id": "tithi--mt76zvyt",
+      "name": "Rudrax",
+      "character": "jim",
+      "accent": "sky",
+      "description": "keeps the codebase tidy and healthy",
+      "project": "C:\\Users\\rudra\\Downloads\\harness",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\Downloads\\harness",
+      "goal": "Continuously hunt for dead code, lint errors, flaky tests, and small safe refactors. Fix the safe ones and leave a note for anything risky. Never change behavior without flagging it.",
+      "status": "working",
+      "action": "awaiting",
+      "progress": 0,
+      "currentStation": "desk",
+      "ptyId": "pty-tithi--mt76zvyt",
+      "command": "opencode",
+      "provider": "opencode",
+      "archived": false
+    },
+    {
+      "id": "pam-mt77gg2y",
+      "name": "Tithix",
+      "character": "pam",
+      "accent": "sky",
+      "description": "a fresh harness",
+      "project": "C:\\Users\\rudra\\Downloads\\harness",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\Downloads\\harness",
+      "status": "working",
+      "action": "using read",
+      "progress": 0,
+      "currentStation": "shelf",
+      "ptyId": "pty-pam-mt77gg2y",
+      "command": "opencode",
+      "provider": "opencode",
+      "archived": false,
+      "lastPrompt": "mo",
+      "carrying": "Read"
+    }
+  ],
+  "archived": [
+    {
+      "id": "rudra-mt770nm2",
+      "name": "so long",
+      "character": "pam",
+      "accent": "sky",
+      "description": "a fresh harness",
+      "project": "C:\\Users\\rudra\\Downloads\\harness",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\Downloads\\harness",
+      "status": "idle",
+      "action": "archived",
+      "progress": 0,
+      "command": "kimi --auto",
+      "provider": "kimi",
+      "archived": true
+    },
+    {
+      "id": "tithix--mt7708f4",
+      "name": "tithix",
+      "character": "kelly",
+      "accent": "coral",
+      "description": "a fresh harness",
+      "project": "C:\\Users\\rudra\\Downloads\\harness",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\Downloads\\harness",
+      "status": "idle",
+      "action": "archived",
+      "progress": 0,
+      "command": "opencode",
+      "provider": "opencode",
+      "archived": true
+    },
+    {
+      "id": "jim-mt772syn",
+      "name": "Jim",
+      "character": "jim",
+      "accent": "sky",
+      "description": "a fresh harness",
+      "project": "C:\\Users\\rudra\\Downloads\\harness",
+      "tmuxTarget": "",
+      "cwd": "C:\\Users\\rudra\\Downloads\\harness",
+      "status": "idle",
+      "action": "archived",
+      "progress": 0,
+      "command": "claude --model claude-fable-5 --permission-mode bypassPermissions",
+      "provider": "claude",
+      "model": "claude-fable-5",
+      "archived": true
+    }
+  ],
+  "restorable": [],
+  "queues": {
+    "god": [
+      {
+        "id": "q-1787575936610-1",
+        "text": "You have new hive inbox message(s) — at least: 2026-08-24T12-21-48-918Z-607e50, 2026-08-24T12-21-51-564Z-846760, 2026-08-24T12-47-36-227Z-e8bae2. Read your inbox, act on what is pending there, and move handled ones to inbox/.done/. Your inbox directory is authoritative: work everything still pending in it, and if a named id is already in inbox/.done/ you handled it on an earlier turn and can ignore that one. Act autonomously; only message god if you genuinely need a decision.",
+        "ts": 1787575936610,
+        "precondition": "inbox-nonempty"
+      }
+    ],
+    "tithi--mt76zvyt": [
+      {
+        "id": "q-1787576045331-2",
+        "text": "Part 1: Hardware Abstraction Layer (HAL) Implementation\n1. Camera HAL: Real Camera Support Integration\nLogic: Replace the dummy stub with a unified camera interface capable of ingesting data from physical USB cameras, network IP streams, and mobile applications, while abstracting the hardware specifics.\nStep-by-Step Guide:\nDefine a standardized camera interface that outputs a uniform frame structure containing raw pixel data, width, height, and pixel format metadata.\nImplement a local hardware module utilizing standard OS-level camera APIs (e.g., Video4Linux2 for Linux, DirectShow for Windows) or a cross-platform video capture wrapper to interface with USB webcams.\nImplement a network stream module capable of parsing RTSP or HTTP MJPEG protocols to ingest video feeds from IP cameras or mobile apps like DroidCam.\nCreate a factory pattern or configuration selector that initializes the appropriate module based on user-defined settings at startup.\nImplement the exposure control function by mapping the requested exposure value to the specific hardware control API of the active camera module.\nEnsure the frame retrieval function correctly blocks or polls the hardware/network stream, allocates memory for the image data, and returns a valid pointer, setting the internal stub flag to false.\n2. Human Detection HAL: Sensor Interface Implementation\nLogic: Create a functional interface for detecting humans in the environment using computer vision or dedicated sensors.\nStep-by-Step Guide:\nDefine the human detection interface with methods to initialize the detector, process frames, and retrieve detection results (bounding boxes, confidence scores).\nIntegrate a lightweight, pre-trained machine learning model optimized for the target hardware's computational limits (e.g., YOLO, SSD, or Haar Cascades).\nRoute the standardized camera frames from the Camera HAL into the detection model.\nParse the model's raw output to extract human bounding boxes and filter them using a configurable confidence threshold to eliminate false positives.\nExpose the filtered, validated detection data through the HAL interface for the main flight control loop to consume.\n3. Gesture & Voice Command HAL: Recognition Logic\nLogic: Implement the actual processing pipelines for audio and visual command recognition.\nStep-by-Step Guide:\nVoice: Initialize an audio input stream from the microphone. Integrate a speech-to-text engine or a lightweight keyword-spotting library. Define a dictionary of expected commands and map recognized audio phonemes to these commands.\nGesture: Use the camera feed to detect hand or body poses using a pose estimation model. Define a set of geometric rules (e.g., specific joint angles or landmark positions) that correspond to physical gestures.\nContinuously evaluate the incoming pose data against the defined gesture rules.\nImplement a state-machine or debouncing logic to ensure a command is triggered only once per gesture execution, preventing rapid, unintended toggling.\nOutput the final recognized command through a unified interface.\n4. Visual Guidance Marker Output: LED/Laser Control\nLogic: Translate system states and guidance vectors into physical visual signals using LEDs or lasers.\nStep-by-Step Guide:\nInitialize the hardware communication protocol required for the visual output hardware (e.g., SPI/I2C for standard LEDs, or specific GPIO timing for addressable LED strips).\nDefine a mapping of system states (idle, tracking, error, path guidance) to specific visual patterns (colors, blinking sequences, intensities).\nCreate a dedicated rendering loop or interrupt handler that updates the hardware states at the required frequency without blocking the main control thread.\nImplement a translation function that converts abstract guidance coordinates or vectors into physical hardware indices (e.g., specific LED positions or laser galvo angles).\nEnsure thread-safe or interrupt-safe mechanisms are used when the main logic updates the visual state.\nPart 2: Computer Vision (CV) Pipeline & Algorithm Enhancements\n5. Generic Camera Resolution & Format Handling\nLogic: Dynamically adapt to varying input resolutions and pixel formats instead of assuming fixed embedded specifications.\nStep-by-Step Guide:\nQuery the initialized camera source upon startup to determine its native resolution and pixel format.\nImplement a format conversion module that translates the source format into the pipeline's required working format.\nImplement a resizing module using interpolation algorithms to scale the frame to the pipeline's expected dimensions.\nCalculate and apply aspect ratio correction (via padding or cropping) to prevent image distortion when the source aspect ratio differs from the target.\nIntegrate these conversion and scaling steps at the very beginning of the CV pipeline, immediately after frame retrieval.\n6. Multi-Color Profile Calibration Dependency\nLogic: Remove reliance on external toolchains for basic operation by providing robust defaults and an internal calibration mode.\nStep-by-Step Guide:\nAnalyze typical environmental lighting and define a set of broad, safe default color ranges for the required profiles.\nImplement an interactive calibration mode within the software that captures live frames.\nCreate a user interface or command-line tool that allows the operator to select a color region on the screen, automatically calculating the minimum and maximum color values based on the selected pixels.\nSave these calibrated profiles to a local configuration file that the system loads on startup.\nAdd a fallback mechanism that loads the broad default profiles if the configuration file is missing or corrupted.\n7. Shape Detection: Beyond Convex Hull Approximation\nLogic: Improve shape detection accuracy for concave and complex geometries.\nStep-by-Step Guide:\nReplace or augment the convex hull algorithm with contour approximation techniques that preserve concavities by operating on the raw contour boundary.\nImplement a shape matching algorithm using invariant moments or template matching to compare the detected contour against a library of known complex shapes.\nFor corner counting, utilize a dedicated corner detection algorithm on the Region of Interest rather than relying solely on polygon approximation.\nCalculate shape properties like solidity and extent to help classify complex or concave shapes.\nCombine these features in a decision tree or simple classifier to output the final, accurate shape label.\n8. Lighting Adaptation: Advanced Preprocessing\nLogic: Replace simplistic binary switching with advanced image enhancement for variable lighting.\nStep-by-Step Guide:\nConvert the input frame to a color space that separates luminance from chrominance.\nApply adaptive histogram equalization specifically to the luminance channel to enhance local contrast without over-amplifying noise.\nImplement an automatic white balance algorithm to correct color casts caused by varying light sources.\nMerge the enhanced luminance channel back with the original chrominance channels and convert back to the working color space.\nAdd a shadow detection step using chromaticity models to distinguish between actual physical shadows and dark objects.\n9. Morphological Operations: Performance Optimization\nLogic: Reduce the computational complexity of image cleanup operations to meet real-time constraints.\nStep-by-Step Guide:\nReplace standard spatial domain erosion and dilation with separable filters or lookup-table-based approaches for uniform kernels.\nUtilize optimized, hardware-accelerated library functions that leverage SIMD instructions instead of custom nested loops.\nImplement dynamic kernel sizing logic that reduces the operation radius when the frame resolution increases, maintaining a constant processing time budget.\nIf precision loss is acceptable, downscale the image before applying heavy operations, process the mask, and upscale it back.\n10. Optical Character Recognition (OCR) Integration\nLogic: Add the capability to read text, numbers, or codes from the environment.\nStep-by-Step Guide:\nIntegrate a lightweight OCR engine or a specialized barcode/QR code reader library.\nBefore processing, apply image preprocessing (grayscale conversion, binarization, noise reduction) to improve character segmentation.\nDefine Regions of Interest based on detected markers to restrict the search area and reduce processing time.\nFeed the preprocessed images into the recognition engine.\nParse and validate the output text against expected formats to filter out garbage reads.\nPart 3: Swarm Coordination & Advanced Vision Features\n11. Cross-Drone Vision Fusion\nLogic: Enable drones to share and fuse vision data for improved accuracy and redundancy.\nStep-by-Step Guide:\nDefine a communication protocol for sharing vision data (marker IDs, coordinates, confidence scores) across the swarm network.\nImplement a broadcast module to transmit the local drone's detections to nearby drones.\nImplement a receiver module to parse incoming vision data from other drones.\nCreate a fusion algorithm that combines detections of the same physical marker from multiple viewpoints.\nUse a weighted average or Kalman filter to merge the coordinates, weighting each drone's data by its reported confidence score and distance to the marker.\nOutput the fused, highly accurate position to the navigation system.\n12. Marker Type Ambiguity Resolution\nLogic: Resolve conflicts when different drones classify the same marker differently.\nStep-by-Step Guide:\nWhen receiving classification data from multiple drones for the same physical marker, collect all reported classifications.\nImplement a consensus algorithm, such as majority voting, or a confidence-weighted voting system.\nDefine a threshold for consensus; if the votes are too split or confidence is too low, flag the marker as ambiguous.\nCommand the swarm to ignore ambiguous markers or dispatch a single drone to get a closer, clearer look.\nLog all classification conflicts and resolutions for post-flight analysis.\n13. Buried Mine Detection Enhancement\nLogic: Detect buried mines using visual cues other than surface markers.\nStep-by-Step Guide:\nAnalyze the soil surface for textural anomalies, slight elevation changes, or color differences indicating disturbed earth.\nImplement a texture analysis algorithm to detect irregularities in the soil pattern.\nUse stereo vision or structure-from-motion techniques to generate a depth map of the ground.\nApply plane fitting to the surrounding undisturbed ground and calculate residual errors to find small mounds or depressions.\nFuse the texture anomalies with the depth anomalies to generate a probability map for buried objects.\nTrigger a specific flight behavior (e.g., lower altitude for a better scan) when a potential buried mine is detected.",
+        "ts": 1787576045331
+      }
+    ],
+    "pam-mt77gg2y": [
+      {
+        "id": "q-1787576085404-3",
+        "text": "14. Dynamic Obstacle Avoidance via Vision\nLogic: Use the camera to detect and avoid dynamic obstacles not covered by LiDAR.\nStep-by-Step Guide:\nImplement a real-time object detection model specifically trained to identify dynamic obstacles (people, animals, vehicles).\nProcess the camera feed continuously to detect these objects and calculate their bounding boxes.\nEstimate the distance to the obstacle using focal length, object size priors, or stereo depth.\nCalculate the time-to-collision based on the obstacle's relative velocity and distance.\nIf the time-to-collision falls below a critical safety threshold, override the current flight path and execute an evasive maneuver.\nEnsure this vision-based avoidance layer has the correct priority in the flight control hierarchy.\n15. Night/Low-Light Operation\nLogic: Enable the vision system to function in low-light or night conditions.\nStep-by-Step Guide:\nImplement a low-light enhancement pipeline as the first step in image processing.\nApply advanced noise reduction algorithms to suppress heavy sensor noise typical in low-light frames.\nUse multi-scale retinex or low-light specific histogram equalization to brighten the image while preserving local contrast.\nDynamically adjust camera hardware settings: increase gain, lower shutter speed (monitoring for motion blur), and maximize aperture.\nIf available, control active illumination (e.g., IR illuminators).\nRelax confidence thresholds for object detection during night mode, acknowledging reduced sensor accuracy.\nPart 4: Testing, Validation, and Performance Benchmarking\n16. Integration Testing Implementation\nLogic: Establish end-to-end and Hardware-in-the-Loop (HIL) testing protocols.\nStep-by-Step Guide:\nDefine integration test scenarios covering complete mission profiles.\nSet up a simulation environment that mocks all hardware interfaces but runs the actual control and CV logic.\nWrite automated test scripts that inject simulated sensor data, run the main loop, and assert expected actuator outputs.\nFor HIL tests, connect the actual flight controller and compute unit to a real-time simulator.\nCreate a field test protocol document detailing physical setup, safety precautions, and data collection methods for real-world validation.\n17. CV Pipeline Unit Test Coverage\nLogic: Write comprehensive unit tests for all computer vision modules.\nStep-by-Step Guide:\nIdentify all public functions in the CV pipeline.\nDefine test cases for each function covering normal operation, edge cases, and error conditions.\nGenerate synthetic test images with known properties to use as deterministic inputs.\nWrite the unit tests using a standard testing framework.\nAssert that the output of the CV functions matches the known properties of the synthetic images within a defined mathematical tolerance.\n18. Performance Benchmarks\nLogic: Implement profiling to measure and track system performance.\nStep-by-Step Guide:\nIntegrate a high-resolution timer into the main control loop and CV pipeline.\nMeasure the execution time of critical sections (frame capture, preprocessing, detection, control calculation).\nMeasure memory allocation and peak RAM usage during operation.\nLog CPU utilization per core to identify bottlenecks.\nCreate a benchmarking script that runs the system under various loads and generates a performance report.\nSet hard performance budgets and implement automated alerts if these budgets are exceeded.\nPart 5: Calibration, Missing Files, and Pre-flight Procedures\n19. Generated Vision Profiles File\nLogic: Ensure the generated configuration file is present and correctly integrated into the build process.\nStep-by-Step Guide:\nLocate the external script responsible for generating the profiles.\nRun the script in a controlled environment to generate the missing header file.\nVerify the contents of the generated file to ensure it contains valid, realistic data.\nUpdate the build system to automatically run the generation script before compiling the main project if the file is missing.\nAdd the generated file to version control, or clearly document the generation step in the build instructions.\n20. Camera Calibration Data\nLogic: Implement a camera calibration routine to obtain accurate intrinsic and extrinsic parameters.\nStep-by-Step Guide:\nDisplay a standard calibration pattern on a flat surface.\nCapture multiple images of the pattern from various angles and distances using the target camera setup.\nImplement a calibration algorithm that detects the pattern corners in the images.\nCalculate the camera matrix and distortion coefficients.\nSave these parameters to a configuration file.\nModify the CV pipeline to load these parameters on startup and apply an undistortion step to all incoming frames, replacing any hardcoded constants.\n21. Pre-flight Calibration Checklist for Vision\nLogic: Create a comprehensive pre-flight checklist specific to the vision system.\nStep-by-Step Guide:\nReview all vision-dependent features and identify what needs verification before flight.\nDraft a step-by-step checklist including lens cleanliness, lighting condition assessment, physical marker verification, and camera focus checks.\nInclude a step for running the automated calibration tool if lighting conditions have changed.\nAdd a step to verify the camera calibration file is present and loaded.\nFormat the checklist clearly and integrate it into the main pre-flight safety documentation.\nPart 6: Documentation, PRD, and Requirements Traceability\n22. Formal PRD Document Creation\nLogic: Create a comprehensive Product Requirements Document to formalize project scope and goals.\nStep-by-Step Guide:\nDefine the document structure: Executive Summary, Product Vision, User Personas, User Stories, Functional/Non-Functional Requirements, Success Metrics, Risk Matrix, and Version History.\nExtract user stories and acceptance criteria for every feature from stakeholder inputs.\nDefine measurable Key Performance Indicators for success.\nIdentify potential risks and define mitigation strategies for each.\nDraft the document, circulate it for review, incorporate feedback, and obtain formal sign-off.\n23. Requirements Traceability Gaps\nLogic: Establish a strict mapping between requirements, code, and tests.\nStep-by-Step Guide:\nAssign a unique, standardized ID to every requirement in the PRD.\nCreate a Requirements Traceability Matrix document or use a tracking tool.\nFor each requirement ID, document the specific code modules that implement it.\nFor each requirement ID, document the specific test cases that verify it.\nMandate regular updates to the matrix during development sprints to ensure full coverage.\n24. Simulation vs. Reality Gap Documentation\nLogic: Document simulation parameters and validate them against real-world data.\nStep-by-Step Guide:\nExtract all sensor noise models, physics parameters, and domain randomization ranges used in the simulation.\nConduct real-world field tests in controlled environments matching the simulation scenarios.\nCompare the simulation output with the real-world field test results.\nCalculate the performance delta between simulated and real-world environments.\nWrite a comprehensive gap analysis document detailing the noise models, comparison results, identified discrepancies, and recommendations for updating the simulation.\nCopy\nAsk Qwen\nExplain\nTranslate(en-US)",
+        "ts": 1787576085404
+      }
+    ]
+  },
+  "selectedId": "pam-mt77gg2y"
+}
