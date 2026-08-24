@@ -1,4 +1,5 @@
 #include "image_enhance.h"
+#include "mem.h"
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -6,6 +7,27 @@
 namespace RobofestDrone {
 
 namespace {
+
+// Scratch capacity cap: enhancements run at process resolution or below.
+constexpr size_t ENH_MAX_PX = 320u * 240u;
+
+// PSRAM-backed lazily-allocated scratch (kept out of precious DRAM).
+struct EnhanceScratch {
+    uint8_t* u8a = nullptr;    // ENH_MAX_PX
+    uint8_t* u8b = nullptr;    // ENH_MAX_PX
+    uint16_t* u16a = nullptr;  // ENH_MAX_PX
+    uint16_t* u16b = nullptr;  // ENH_MAX_PX
+
+    bool ensure() {
+        if (u8a == nullptr) u8a = static_cast<uint8_t*>(robofest_big_alloc(ENH_MAX_PX));
+        if (u8b == nullptr) u8b = static_cast<uint8_t*>(robofest_big_alloc(ENH_MAX_PX));
+        if (u16a == nullptr) u16a = static_cast<uint16_t*>(robofest_big_alloc(ENH_MAX_PX * sizeof(uint16_t)));
+        if (u16b == nullptr) u16b = static_cast<uint16_t*>(robofest_big_alloc(ENH_MAX_PX * sizeof(uint16_t)));
+        return u8a && u8b && u16a && u16b;
+    }
+};
+
+EnhanceScratch s_scratch;
 
 constexpr uint16_t CLAHE_TILES_X = 4;
 constexpr uint16_t CLAHE_TILES_Y = 3;
@@ -55,8 +77,9 @@ void enhance_clahe_v(uint8_t* rgb888, uint16_t w, uint16_t h, float strength) {
     if (strength > 1.0f) strength = 1.0f;
 
     // 1. Extract V plane + per-tile histograms.
-    static uint8_t v_plane[320 * 240];   // working buffer cap (process res max)
-    if (static_cast<size_t>(w) * h > sizeof(v_plane)) return;
+    if (static_cast<size_t>(w) * h > ENH_MAX_PX) return;
+    if (!s_scratch.ensure()) return;
+    uint8_t* v_plane = s_scratch.u8a;
 
     static uint32_t hist[CLAHE_TILES_Y][CLAHE_TILES_X][HIST_BINS];
     std::memset(hist, 0, sizeof(hist));
@@ -169,7 +192,7 @@ float enhance_haze_severity(const uint8_t* rgb888, uint16_t w, uint16_t h) {
     const int gh = (h + STRIDE - 1) / STRIDE;
     if (gw <= 0 || gh <= 0) return 0.0f;
 
-    static uint8_t dark[(320 / 2 + 1) * (240 / 2 + 1)];
+    static uint8_t dark[(ENH_MAX_PX / 2) + 1];
     if (static_cast<size_t>(gw) * gh > sizeof(dark)) return 0.0f;
 
     uint32_t dark_sum = 0;
@@ -270,10 +293,12 @@ void enhance_dehaze(uint8_t* rgb888, uint16_t w, uint16_t h, float strength) {
 void enhance_shadow_mask(const uint8_t* rgb888, uint16_t w, uint16_t h,
                          uint8_t* out_flags) {
     if (rgb888 == nullptr || out_flags == nullptr || w == 0 || h == 0) return;
+    if (static_cast<size_t>(w) * h > ENH_MAX_PX) return;
+    if (!s_scratch.ensure()) return;
 
-    static uint8_t lum[320 * 240];
-    static uint16_t blur[320 * 240];
-    if (static_cast<size_t>(w) * h > sizeof(lum)) return;
+    uint8_t* lum = s_scratch.u8a;
+    uint16_t* blur = s_scratch.u16a;
+    uint16_t* vert = s_scratch.u16b;
 
     for (size_t i = 0, p = 0; p < static_cast<size_t>(w) * h; i += 3, ++p) {
         lum[p] = static_cast<uint8_t>((77u * rgb888[i] + 150u * rgb888[i + 1] +
@@ -292,9 +317,8 @@ void enhance_shadow_mask(const uint8_t* rgb888, uint16_t w, uint16_t h,
                 acc / std::min<uint32_t>(2u * R + 1u, x + 1u));
         }
     }
-    // Vertical pass writes back into lum-blur combination (approximate is fine:
-    // reuse horizontal result and average over column window).
-    static uint16_t vert[320 * 240];
+    // Vertical pass writes into the second PSRAM plane (cannot reuse blur
+    // in place: column windows read rows written earlier in this pass).
     for (uint16_t x = 0; x < w; ++x) {
         uint32_t acc = 0;
         for (uint16_t y = 0; y < h; ++y) {

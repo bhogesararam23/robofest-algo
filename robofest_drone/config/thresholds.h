@@ -676,6 +676,36 @@ constexpr bool HUMAN_USE_FOOT_POINT = true;
 constexpr float HUMAN_PIXEL_NOISE_LIMIT_PX = 80.0f;
 
 // ============================================================================
+// HUMAN MOTION DETECTOR (ITEM 2 CLASSICAL BACKEND, REQ-DER-102)
+// ============================================================================
+
+// Grayscale frame-difference threshold for motion pixels.
+constexpr uint8_t HUMAN_DIFF_THRESHOLD = 18;
+
+// Motion components smaller than this many working pixels are noise.
+constexpr uint16_t HUMAN_MOTION_MIN_BLOB_PX = 8;
+
+// Motion covering more than this fraction of the frame is global change
+// (shake / flicker), not a person.
+constexpr float HUMAN_MOTION_MAX_AREA_RATIO = 0.25f;
+
+// Bounding-box aspect gate (people from above stay roughly compact).
+constexpr float HUMAN_MOTION_MAX_ASPECT = 3.5f;
+
+// Consecutive plausible frames required before emitting a detection.
+constexpr uint8_t HUMAN_MOTION_CONFIRM_HITS = 2;
+
+// Minimum interval between emitted detections from the same walk-by.
+constexpr uint32_t HUMAN_MOTION_REFRACTORY_MS = 1200UL;
+
+// Neural-model path: run ESP-DL pedestrian inference every Nth vision cycle
+// so the classical detector owns the remaining slots.
+constexpr uint8_t HUMAN_MODEL_RUN_DIVIDER = 4;
+
+// Confidence floor applied to model outputs before they leave the HAL.
+constexpr float HUMAN_MODEL_CONFIDENCE_MIN = 0.55f;
+
+// ============================================================================
 // SWARM COMMUNICATION THRESHOLDS
 // ============================================================================
 
