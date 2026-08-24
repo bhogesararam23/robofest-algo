@@ -1,0 +1,921 @@
+{
+  "config": {
+    "scenario": "nominal_map",
+    "seed": 1,
+    "drones": 3,
+    "mines": 40,
+    "duration_s": 121.3
+  },
+  "events": [
+    {
+      "timestamp_s": 0.0,
+      "drone_id": "global",
+      "event_type": "mission_start",
+      "details": "Scenario: nominal_map Seed: 1"
+    },
+    {
+      "timestamp_s": 0.0,
+      "drone_id": "global",
+      "event_type": "self_check_pass",
+      "details": "All 15 modules ready on ground"
+    },
+    {
+      "timestamp_s": 0.0,
+      "drone_id": "global",
+      "event_type": "start_command_accepted",
+      "details": "START gesture validated"
+    },
+    {
+      "timestamp_s": 0.0,
+      "drone_id": 1,
+      "event_type": "takeoff_started",
+      "details": ""
+    },
+    {
+      "timestamp_s": 0.0,
+      "drone_id": 2,
+      "event_type": "takeoff_started",
+      "details": ""
+    },
+    {
+      "timestamp_s": 0.0,
+      "drone_id": 3,
+      "event_type": "takeoff_started",
+      "details": ""
+    },
+    {
+      "timestamp_s": 3.85,
+      "drone_id": "global",
+      "event_type": "takeoff_complete",
+      "details": "Alt: 2.0m"
+    },
+    {
+      "timestamp_s": 4.1,
+      "drone_id": "global",
+      "event_type": "formation_complete",
+      "details": "Fleet in lane holding"
+    },
+    {
+      "timestamp_s": 33.15,
+      "drone_id": 3,
+      "event_type": "path_planned",
+      "details": "Waypoints: 20"
+    },
+    {
+      "timestamp_s": 121.3,
+      "drone_id": "global",
+      "event_type": "human_exit_reached",
+      "details": "Time: 121.3s"
+    },
+    {
+      "timestamp_s": 121.3,
+      "drone_id": "global",
+      "event_type": "mission_complete",
+      "details": "Safe corridor traversed successfully"
+    }
+  ],
+  "drones": [
+    {
+      "drone_id": 1,
+      "role": "SCOUT_LEFT",
+      "state": "LANDING",
+      "true_pose": {
+        "x": 4.0,
+        "y": 53.838,
+        "alt_m": 2.0
+      },
+      "est_pose": {
+        "x": 5.184,
+        "y": 48.933,
+        "alt_m": 1.97
+      },
+      "drift_uncertainty_m": 2.345,
+      "battery_percent": 98.2,
+      "confirmed_mines": 22,
+      "path_version": 1
+    },
+    {
+      "drone_id": 2,
+      "role": "SCOUT_RIGHT",
+      "state": "LANDING",
+      "true_pose": {
+        "x": 11.0,
+        "y": 53.838,
+        "alt_m": 2.0
+      },
+      "est_pose": {
+        "x": 11.98,
+        "y": 49.153,
+        "alt_m": 2.02
+      },
+      "drift_uncertainty_m": 2.345,
+      "battery_percent": 98.2,
+      "confirmed_mines": 21,
+      "path_version": 1
+    },
+    {
+      "drone_id": 3,
+      "role": "GUIDE_MARKER",
+      "state": "LANDING",
+      "true_pose": {
+        "x": 13.0,
+        "y": 26.984,
+        "alt_m": 2.0
+      },
+      "est_pose": {
+        "x": 13.336,
+        "y": 25.799,
+        "alt_m": 2.02
+      },
+      "drift_uncertainty_m": 2.345,
+      "battery_percent": 98.2,
+      "confirmed_mines": 20,
+      "path_version": 1
+    }
+  ],
+  "human": {
+    "human_id": 1,
+    "behavior": "obedient_human",
+    "state": "REACHED_EXIT",
+    "x": 8.057,
+    "y": 59.003,
+    "speed_mps": 0.8,
+    "reached_exit": true,
+    "crossing_time_s": 88.15,
+    "max_deviation_m": 7.286,
+    "off_path_count": 580
+  },
+  "fused_mines": [
+    {
+      "mine_id": 7,
+      "x": 11.387,
+      "y": 7.117,
+      "confidence": 84.58560777284262,
+      "persistence_count": 4129,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 12,
+      "x": 3.926,
+      "y": 14.895,
+      "confidence": 85.0598441911918,
+      "persistence_count": 3537,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 13,
+      "x": 11.042,
+      "y": 16.046,
+      "confidence": 85.13630214442996,
+      "persistence_count": 3359,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 14,
+      "x": 10.727,
+      "y": 15.615,
+      "confidence": 84.27275723056175,
+      "persistence_count": 3364,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 15,
+      "x": 11.642,
+      "y": 16.31,
+      "confidence": 76.82439877554563,
+      "persistence_count": 3343,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 21,
+      "x": 1.839,
+      "y": 3.065,
+      "confidence": 83.90754662739405,
+      "persistence_count": 2949,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 22,
+      "x": 9.776,
+      "y": 22.984,
+      "confidence": 85.45798645754806,
+      "persistence_count": 2749,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 25,
+      "x": 3.712,
+      "y": 25.641,
+      "confidence": 83.16853333641731,
+      "persistence_count": 2599,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 26,
+      "x": 4.923,
+      "y": 25.829,
+      "confidence": 50.099999999999994,
+      "persistence_count": 2,
+      "status": "CANDIDATE",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 27,
+      "x": 11.989,
+      "y": 26.29,
+      "confidence": 74.98239286144415,
+      "persistence_count": 2472,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 28,
+      "x": 3.683,
+      "y": 26.612,
+      "confidence": 83.52802859345474,
+      "persistence_count": 2514,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 30,
+      "x": 3.253,
+      "y": 30.225,
+      "confidence": 86.43499999999995,
+      "persistence_count": 2197,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 31,
+      "x": 3.569,
+      "y": 30.391,
+      "confidence": 86.43499999999999,
+      "persistence_count": 3,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 32,
+      "x": 11.411,
+      "y": 30.995,
+      "confidence": 83.98182000000008,
+      "persistence_count": 3040,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 33,
+      "x": 4.292,
+      "y": 32.735,
+      "confidence": 76.04351529969668,
+      "persistence_count": 1971,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 34,
+      "x": 3.042,
+      "y": 32.695,
+      "confidence": 85.95035175043694,
+      "persistence_count": 1980,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 35,
+      "x": 12.017,
+      "y": 33.006,
+      "confidence": 84.25143170953105,
+      "persistence_count": 1871,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 37,
+      "x": 5.018,
+      "y": 34.79,
+      "confidence": 74.97516371672072,
+      "persistence_count": 1772,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 38,
+      "x": 4.814,
+      "y": 35.117,
+      "confidence": 76.55000000000001,
+      "persistence_count": 2,
+      "status": "CANDIDATE",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 42,
+      "x": 12.484,
+      "y": 14.899,
+      "confidence": 84.33664732538446,
+      "persistence_count": 1245,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 48,
+      "x": 3.828,
+      "y": 46.6,
+      "confidence": 82.69714570000016,
+      "persistence_count": 762,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 49,
+      "x": 4.224,
+      "y": 46.723,
+      "confidence": 82.6971457,
+      "persistence_count": 7,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 50,
+      "x": 11.255,
+      "y": 48.063,
+      "confidence": 74.6609942416935,
+      "persistence_count": 579,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 57,
+      "x": 13.376,
+      "y": 25.628,
+      "confidence": 75.60301774901819,
+      "persistence_count": 210,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 4,
+      "x": 11.387,
+      "y": 7.117,
+      "confidence": 84.58560777284265,
+      "persistence_count": 4198,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 14,
+      "x": 3.926,
+      "y": 14.895,
+      "confidence": 85.05984419119179,
+      "persistence_count": 3457,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 17,
+      "x": 10.727,
+      "y": 15.615,
+      "confidence": 84.27275723056175,
+      "persistence_count": 3372,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 18,
+      "x": 11.042,
+      "y": 16.046,
+      "confidence": 85.13630214442996,
+      "persistence_count": 3421,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 19,
+      "x": 11.642,
+      "y": 16.31,
+      "confidence": 76.82439877554563,
+      "persistence_count": 3392,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 20,
+      "x": 1.839,
+      "y": 3.065,
+      "confidence": 83.90754662739403,
+      "persistence_count": 2947,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 25,
+      "x": 9.776,
+      "y": 22.984,
+      "confidence": 85.45798645754806,
+      "persistence_count": 2833,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 28,
+      "x": 3.712,
+      "y": 25.641,
+      "confidence": 83.16853333641734,
+      "persistence_count": 2530,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 29,
+      "x": 11.989,
+      "y": 26.29,
+      "confidence": 74.98239286144415,
+      "persistence_count": 2545,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 30,
+      "x": 3.683,
+      "y": 26.612,
+      "confidence": 83.52802859345474,
+      "persistence_count": 2459,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 35,
+      "x": 3.253,
+      "y": 30.225,
+      "confidence": 86.43499999999995,
+      "persistence_count": 3133,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 37,
+      "x": 11.411,
+      "y": 30.995,
+      "confidence": 83.98182000000011,
+      "persistence_count": 2114,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 38,
+      "x": 11.763,
+      "y": 31.121,
+      "confidence": 83.98181999999998,
+      "persistence_count": 5,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 39,
+      "x": 4.292,
+      "y": 32.735,
+      "confidence": 76.04351529969667,
+      "persistence_count": 1899,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 40,
+      "x": 3.042,
+      "y": 32.695,
+      "confidence": 85.95035175043691,
+      "persistence_count": 1910,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 42,
+      "x": 12.017,
+      "y": 33.006,
+      "confidence": 84.25143170953105,
+      "persistence_count": 1941,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 44,
+      "x": 5.018,
+      "y": 34.79,
+      "confidence": 74.9751637167207,
+      "persistence_count": 1719,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 46,
+      "x": 11.705,
+      "y": 36.153,
+      "confidence": 54.169999999999995,
+      "persistence_count": 2,
+      "status": "CANDIDATE",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 48,
+      "x": 12.484,
+      "y": 14.899,
+      "confidence": 84.33664732538449,
+      "persistence_count": 1255,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 50,
+      "x": 3.828,
+      "y": 46.6,
+      "confidence": 82.6971457000001,
+      "persistence_count": 1021,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 51,
+      "x": 11.255,
+      "y": 48.063,
+      "confidence": 74.66099424169352,
+      "persistence_count": 635,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 56,
+      "x": 13.376,
+      "y": 25.628,
+      "confidence": 75.603017749098,
+      "persistence_count": 204,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 1,
+      "x": 7.879,
+      "y": 0.13,
+      "confidence": 64.49,
+      "persistence_count": 2,
+      "status": "CANDIDATE",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 2,
+      "x": 6.881,
+      "y": 0.11,
+      "confidence": 48.019999999999996,
+      "persistence_count": 2,
+      "status": "CANDIDATE",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 5,
+      "x": 11.387,
+      "y": 7.117,
+      "confidence": 84.58560777284262,
+      "persistence_count": 4140,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 11,
+      "x": 3.926,
+      "y": 14.895,
+      "confidence": 85.05984419119179,
+      "persistence_count": 3441,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 12,
+      "x": 11.042,
+      "y": 16.046,
+      "confidence": 85.13630214442996,
+      "persistence_count": 3381,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 13,
+      "x": 10.727,
+      "y": 15.615,
+      "confidence": 84.27275723056175,
+      "persistence_count": 3355,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 14,
+      "x": 11.642,
+      "y": 16.31,
+      "confidence": 76.82439877554562,
+      "persistence_count": 3367,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 17,
+      "x": 1.839,
+      "y": 3.065,
+      "confidence": 83.90754662739403,
+      "persistence_count": 2989,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 20,
+      "x": 9.776,
+      "y": 22.984,
+      "confidence": 85.45798645754807,
+      "persistence_count": 2753,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 21,
+      "x": 3.712,
+      "y": 25.641,
+      "confidence": 83.16853333641731,
+      "persistence_count": 2522,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 22,
+      "x": 11.989,
+      "y": 26.29,
+      "confidence": 74.83708174906302,
+      "persistence_count": 2534,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 24,
+      "x": 3.683,
+      "y": 26.612,
+      "confidence": 83.52802859345476,
+      "persistence_count": 2454,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 30,
+      "x": 3.253,
+      "y": 30.225,
+      "confidence": 86.43499999999995,
+      "persistence_count": 3122,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 31,
+      "x": 11.411,
+      "y": 30.995,
+      "confidence": 83.98182000000008,
+      "persistence_count": 3029,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 32,
+      "x": 4.292,
+      "y": 32.735,
+      "confidence": 76.04351529969667,
+      "persistence_count": 1908,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 33,
+      "x": 3.042,
+      "y": 32.695,
+      "confidence": 85.95035175043691,
+      "persistence_count": 1909,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 34,
+      "x": 9.044,
+      "y": 11.477,
+      "confidence": 59.099999999999994,
+      "persistence_count": 2,
+      "status": "CANDIDATE",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 35,
+      "x": 12.017,
+      "y": 33.006,
+      "confidence": 84.25143170953105,
+      "persistence_count": 1877,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 37,
+      "x": 5.018,
+      "y": 34.79,
+      "confidence": 74.9751637167207,
+      "persistence_count": 1715,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 40,
+      "x": 12.484,
+      "y": 14.899,
+      "confidence": 84.33664732538446,
+      "persistence_count": 1332,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 44,
+      "x": 3.828,
+      "y": 46.6,
+      "confidence": 82.6971457000001,
+      "persistence_count": 1020,
+      "status": "CONFIRMED",
+      "marker_type": "ON_GROUND_MINE"
+    },
+    {
+      "mine_id": 45,
+      "x": 11.255,
+      "y": 48.063,
+      "confidence": 74.6609942416935,
+      "persistence_count": 579,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    },
+    {
+      "mine_id": 48,
+      "x": 13.376,
+      "y": 25.628,
+      "confidence": 75.60301761454923,
+      "persistence_count": 267,
+      "status": "CONFIRMED",
+      "marker_type": "BURIED_SURFACE_MARKER"
+    }
+  ],
+  "final_path": [
+    {
+      "x": 7.5,
+      "y": 0.5
+    },
+    {
+      "x": 2.0,
+      "y": 4.0
+    },
+    {
+      "x": 2.0,
+      "y": 7.0
+    },
+    {
+      "x": 6.0,
+      "y": 10.0
+    },
+    {
+      "x": 13.0,
+      "y": 13.0
+    },
+    {
+      "x": 13.0,
+      "y": 16.0
+    },
+    {
+      "x": 13.0,
+      "y": 19.0
+    },
+    {
+      "x": 13.0,
+      "y": 22.0
+    },
+    {
+      "x": 13.0,
+      "y": 25.0
+    },
+    {
+      "x": 13.0,
+      "y": 28.0
+    },
+    {
+      "x": 13.0,
+      "y": 31.0
+    },
+    {
+      "x": 13.0,
+      "y": 34.0
+    },
+    {
+      "x": 13.0,
+      "y": 37.0
+    },
+    {
+      "x": 13.0,
+      "y": 40.0
+    },
+    {
+      "x": 13.0,
+      "y": 43.0
+    },
+    {
+      "x": 13.0,
+      "y": 46.0
+    },
+    {
+      "x": 13.0,
+      "y": 49.0
+    },
+    {
+      "x": 13.0,
+      "y": 52.0
+    },
+    {
+      "x": 13.0,
+      "y": 55.0
+    },
+    {
+      "x": 7.5,
+      "y": 59.5
+    }
+  ],
+  "metrics": {
+    "activation": {
+      "start_command_accepted": true,
+      "time_to_takeoff_s": 3.85,
+      "takeoff_success": true
+    },
+    "command_recognition": {
+      "commands_issued": 1,
+      "commands_accepted": 1,
+      "commands_rejected": 0,
+      "false_triggers": 0
+    },
+    "swarm": {
+      "formation_success": true,
+      "formation_time_s": 4.1,
+      "peer_lost_count": 0,
+      "role_failover_count": 0,
+      "claim_conflict_count": 0,
+      "duplicate_suppression_count": 0
+    },
+    "mapping": {
+      "true_mine_count": 40,
+      "detected_true_mines": 19,
+      "false_positive_mines": 50,
+      "confirmed_true_mines": 63,
+      "confirmed_false_mines": 0,
+      "mine_position_rmse_m": 0.168,
+      "precision": 0.275,
+      "recall": 0.475,
+      "f1_score": 0.349
+    },
+    "path": {
+      "path_success": false,
+      "path_clearance_violation_count": 10,
+      "minimum_clearance_to_true_mines_m": 0.348,
+      "total_waypoints": 20
+    },
+    "human_crossing": {
+      "crossing_success": true,
+      "crossing_time_s": 88.15,
+      "off_path_count": 580,
+      "max_deviation_m": 7.286
+    },
+    "safety": {
+      "collision_count": 0,
+      "unsafe_proximity_count": 0,
+      "surface_contact_count": 0,
+      "mission_timeout_count": 0
+    }
+  },
+  "score": {
+    "category_scores": {
+      "takeoff_and_activation": 10.0,
+      "command_recognition": 10.0,
+      "swarm_formation": 10.0,
+      "mine_detection_mapping": 8.72,
+      "safe_path_creation": 5.0,
+      "safe_human_crossing": 20.0,
+      "time_bonus": 5.0
+    },
+    "penalty_total": -150.0,
+    "total_score": 0.0,
+    "recommendations": [
+      "Improve buried surface marker detection HSV thresholds or lower confidence threshold.",
+      "Increase persistence count threshold to suppress false positive glare.",
+      "Increase A* obstacle inflation radius to guarantee >= 1.0m mine clearance."
+    ]
+  }
+}

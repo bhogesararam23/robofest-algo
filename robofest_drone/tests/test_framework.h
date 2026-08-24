@@ -55,4 +55,9 @@ inline bool register_test(const std::string& suite, const std::string& name, std
         throw std::runtime_error(std::string("Assertion failed: ") + #a + " near " + #b + " at " + __FILE__ + ":" + std::to_string(__LINE__)); \
     }
 
+#define ASSERT_NE(a, b) \
+    if ((a) == (b)) { \
+        throw std::runtime_error(std::string("Assertion failed: ") + #a + " != " + #b + " at " + __FILE__ + ":" + std::to_string(__LINE__)); \
+    }
+
 } // namespace TestFramework

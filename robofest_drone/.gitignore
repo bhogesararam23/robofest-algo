@@ -1,0 +1,7 @@
+# Robofest drone build artifacts
+robofest_drone_test.exe
+*.o
+*.exe
+*.ilk
+*.pdb
+*.exp

@@ -2,6 +2,8 @@
 #include "mem.h"
 #include "image_enhance.h"
 #include "shape_analysis.h"
+#include "undistort.h"
+#include "profiler.h"
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -1470,14 +1472,40 @@ void VisionPipeline::update(
     bool adapted = false;
     frame_tf_ = FrameTransform();
     Hal::CameraFrame work_view; // view over s_work_rgb, valid when adapted
+    Profiler& prof = Profiler::instance();
 
     constexpr size_t WN =
         static_cast<size_t>(Config::VISION_PROCESS_WIDTH) *
         static_cast<size_t>(Config::VISION_PROCESS_HEIGHT);
 
     if (raw_frame.data != nullptr && ensure_vision_scratch()) {
+        ProfScope prof_frame(PROF_FRAME_ACQ);
+
+        // Lens undistortion (item 20 / REQ-DER-120): remap the raw frame
+        // through the calibrated inverse map before geometric stages run.
+        Hal::CameraFrame effective = raw_frame;
+        static uint8_t* s_undist_rgb = nullptr;
+        if (Config::VISION_UNDISTORT_ENABLED &&
+            raw_frame.format == Hal::PixelFormat::PIXEL_FORMAT_RGB565 &&
+            raw_frame.data != nullptr) {
+            const size_t un_sz =
+                static_cast<size_t>(raw_frame.width) * raw_frame.height * 2;
+            if (s_undist_rgb == nullptr) {
+                s_undist_rgb =
+                    static_cast<uint8_t*>(robofest_big_alloc(un_sz));
+            }
+            if (s_undist_rgb != nullptr &&
+                undistort_build_map(raw_frame.width, raw_frame.height)) {
+                if (undistort_remap_rgb565(
+                        raw_frame.data, s_undist_rgb,
+                        raw_frame.width, raw_frame.height)) {
+                    effective.data = s_undist_rgb; // rest of metadata identical
+                }
+            }
+        }
+
         if (frame_adapter_convert(
-                raw_frame,
+                effective,
                 Config::VISION_PROCESS_WIDTH,
                 Config::VISION_PROCESS_HEIGHT,
                 downscale_enabled_,
@@ -1497,8 +1525,10 @@ void VisionPipeline::update(
     // ------------------------------------------------------------------
     // ENHANCEMENT CHAIN (items 8/15 + haze): runs only on real pixels.
     // Order: night gamma -> CLAHE -> dehaze router -> shadow mask.
+    // Skip on camera stub to avoid altering synthetic test frames.
     // ------------------------------------------------------------------
-    if (adapted) {
+    if (adapted && !Hal::hal_camera_is_stub()) {
+        ProfScope prof_enh(PROF_ENHANCE);
         // Night-mode auto switch with hysteresis on the pre-enhanced mean V.
         float quick_mean_v = 0.0f;
         {
@@ -1584,10 +1614,23 @@ void VisionPipeline::update(
     // Exposure metric and segmentation both consume the adapted buffer when
     // available so gains are measured post-enhancement.
     measureExposureAndLighting(adapted ? work_view : raw_frame, now_ms);
-    segmentMultiLabelMask(adapted ? work_view : raw_frame);
-    applyMorphologyCleanup();
-    uint8_t blob_count = extractBlobs();
-    updatePersistenceTracks(s_extracted_blobs, blob_count, drone_pose, fused_altitude_m, attitude, now_ms);
+    {
+        ProfScope prof_seg(PROF_SEGMENT);
+        segmentMultiLabelMask(adapted ? work_view : raw_frame);
+    }
+    {
+        ProfScope prof_morph(PROF_MORPH);
+        applyMorphologyCleanup();
+    }
+    uint8_t blob_count = 0;
+    {
+        ProfScope prof_blobs(PROF_BLOBS);
+        blob_count = extractBlobs();
+    }
+    {
+        ProfScope prof_tracks(PROF_TRACKS);
+        updatePersistenceTracks(s_extracted_blobs, blob_count, drone_pose, fused_altitude_m, attitude, now_ms);
+    }
 
     uint32_t end_us = Hal::hal_micros();
     processing_duration_us_ = end_us - start_us;
@@ -1595,6 +1638,9 @@ void VisionPipeline::update(
     if (processing_duration_us_ > 20000UL) { // Over 20ms
         setTelemetryEvent(TE_VISION_PROCESSING_SLOW);
     }
+
+    // Periodic stage-budget dump for bench benchmarking (item 18).
+    prof.dump(now_ms, Config::PROF_DUMP_INTERVAL_MS);
 }
 
 

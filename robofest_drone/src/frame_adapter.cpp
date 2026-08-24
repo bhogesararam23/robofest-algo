@@ -1,5 +1,21 @@
+// ============================================================================
+// FRAME ADAPTER - Adaptive resolution/format handling for vision pipeline
+// ============================================================================
+// Status: Core bilinear resampling + letterboxing works.
+// Known issue: 2x downscaling fast path (nearest-neighbor) disabled due to
+// test_cv_e2e yellow marker detection failure. Bilinear interpolation slightly
+// blurs small markers. Re-enable fast path after fixing downsampling.
+// 
+// Remaining items:
+//   - Re-enable 2x nearest-neighbor fast path for 320x240 -> 160x120
+//   - Add configurable downsampling mode (bilinear vs nearest-neighbor)
+//   - Verify RGB565 little-endian packing matches target hardware (XIAO ESP32S3)
+//   - Add frame_adapter unit tests for edge cases
+// ============================================================================
+
 #include "frame_adapter.h"
 #include <cstring>
+#include <cmath>
 
 namespace RobofestDrone {
 
@@ -11,18 +27,23 @@ inline void fetch_rgb888_or_565(
     uint8_t out[3]) {
 
     if (src.format == Hal::PixelFormat::PIXEL_FORMAT_RGB565) {
-        const uint32_t i = (static_cast<uint32_t>(py) * src.width + px) * 2;
-        const uint16_t p = static_cast<uint16_t>(
-            src.data[i] | (src.data[i + 1] << 8));
+        const size_t i = (static_cast<size_t>(py) * src.width + px) * 2;
+        if (i + 1 >= src.buffer_size) { out[0]=out[1]=out[2]=0; return; }
+        const uint16_t p = static_cast<uint16_t>(src.data[i] | (src.data[i + 1] << 8));
         out[0] = static_cast<uint8_t>(((p >> 11) & 0x1F) << 3);
         out[1] = static_cast<uint8_t>(((p >> 5) & 0x3F) << 2);
         out[2] = static_cast<uint8_t>((p & 0x1F) << 3);
         return;
     }
-    const uint32_t i = (static_cast<uint32_t>(py) * src.width + px) * 3;
-    out[0] = src.data[i];
-    out[1] = src.data[i + 1];
-    out[2] = src.data[i + 2];
+    if (src.format == Hal::PixelFormat::PIXEL_FORMAT_RGB888) {
+        const size_t i = (static_cast<size_t>(py) * src.width + px) * 3;
+        if (i + 2 >= src.buffer_size) { out[0]=out[1]=out[2]=0; return; }
+        out[0] = src.data[i];
+        out[1] = src.data[i + 1];
+        out[2] = src.data[i + 2];
+        return;
+    }
+    out[0] = out[1] = out[2] = 0;
 }
 
 } // namespace
@@ -44,13 +65,53 @@ bool frame_adapter_convert(
         return false;
     }
 
-    // Letterbox scale: content must FIT both axes => max of the ratios.
     const float sx = static_cast<float>(src.width) / dst_w;
     const float sy = static_cast<float>(src.height) / dst_h;
-    const float scale = (sx > sy) ? sx : sy;
 
-    const float content_w = static_cast<float>(src.width) / scale;
-    const float content_h = static_cast<float>(src.height) / scale;
+    // Fast path: exact 2x downscaling (legacy nearest-neighbor behavior).
+    // TODO: Re-enable after debugging test failure.
+    // Currently disabled because the bilinear path produces slightly different
+    // colors for small markers (e.g., yellow circle at (80,60)) compared to
+    // the legacy nearest-neighbor 2x decimation. The bilinear interpolation
+    // slightly blurs small marker edges, causing HSV threshold misses for
+    // the yellow buried marker. Re-enable after:
+    //   1. Verify RGB565 little-endian packing matches target hardware
+    //   2. Check if bilinear interpolation can be replaced with a more
+    //      accurate downsampling that preserves sharp edges
+    //   3. Consider adding a configurable downsampling mode (bilinear vs NN)
+    const bool exact_half_downscale = false;
+    if (false && std::abs(sx - 2.0f) < 0.001f && std::abs(sy - 2.0f) < 0.001f) {
+        for (uint16_t ty = 0; ty < dst_h; ++ty) {
+            uint8_t* row = dst_rgb888 + static_cast<size_t>(ty) * dst_w * 3;
+            const uint16_t sy = ty * 2;
+            for (uint16_t tx = 0; tx < dst_w; ++tx) {
+                const uint16_t sx = tx * 2;
+                uint8_t c[3];
+                fetch_rgb888_or_565(src, sx, sy, c);
+                uint8_t* dst = dst_rgb888 + (static_cast<size_t>(ty) * dst_w + tx) * 3;
+                dst[0] = c[0]; dst[1] = c[1]; dst[2] = c[2];
+            }
+        }
+        out_tf.valid = true;
+        out_tf.scale = 0.5f;
+        out_tf.pad_x = 0;
+        out_tf.pad_y = 0;
+        out_tf.src_w = src.width;
+        out_tf.src_h = src.height;
+        out_tf.dst_w = dst_w;
+        out_tf.dst_h = dst_h;
+        return true;
+    }
+
+    // Letterbox sampling step: SOURCE pixels advanced per process pixel.
+    // Content must FIT both axes => max of the ratios. The inverse of this
+    // step is what FrameTransform carries (process->native), because
+    // consumers map process->native by DIVIDING coordinates by tf.scale.
+    const float step = (sx > sy) ? sx : sy;
+
+    // Content extent on the process plane and centered offsets.
+    const float content_w = static_cast<float>(src.width) / step;
+    const float content_h = static_cast<float>(src.height) / step;
     const float off_x_f = (static_cast<float>(dst_w) - content_w) * 0.5f;
     const float off_y_f = (static_cast<float>(dst_h) - content_h) * 0.5f;
 
@@ -59,11 +120,11 @@ bool frame_adapter_convert(
         uint8_t* row = dst_rgb888 + static_cast<size_t>(ty) * dst_w * 3;
         for (uint16_t tx = 0; tx < dst_w; ++tx) {
             const float fx =
-                (static_cast<float>(tx) - off_x_f + 0.5f) * scale - 0.5f;
+                (static_cast<float>(tx) - off_x_f + 0.5f) * step - 0.5f;
             const float fy =
-                (static_cast<float>(ty) - off_y_f + 0.5f) * scale - 0.5f;
+                (static_cast<float>(ty) - off_y_f + 0.5f) * step - 0.5f;
 
-            uint8_t* dst = row + static_cast<size_t>(tx) * 3;
+            uint8_t* dst = dst_rgb888 + (static_cast<size_t>(ty) * dst_w + tx) * 3;
 
             if (fx < 0.0f || fy < 0.0f ||
                 fx > static_cast<float>(src.width - 1) ||
@@ -87,9 +148,9 @@ bool frame_adapter_convert(
             fetch_rgb888_or_565(src, x1, y1, c11);
 
             for (int c = 0; c < 3; ++c) {
-                const float top = c00[c] + (c10[c] - c00[c]) * ax;
-                const float bot = c01[c] + (c11[c] - c01[c]) * ax;
-                float v = top + (bot - top) * ay;
+                const float top = c00[c] + (c10[c] - c00[c]) * (fx - static_cast<float>(x0));
+                const float bot = c01[c] + (c11[c] - c01[c]) * (fx - static_cast<float>(x0));
+                float v = top + (bot - top) * (fy - static_cast<float>(y0));
                 if (v < 0.0f) v = 0.0f;
                 if (v > 255.0f) v = 255.0f;
                 dst[c] = static_cast<uint8_t>(v + 0.5f);
@@ -116,7 +177,7 @@ bool frame_adapter_convert(
             : (ty > static_cast<uint16_t>(cy_hi)) ? cy_hi
             : static_cast<int32_t>(ty);
         for (uint16_t tx = 0; tx < dst_w; ++tx) {
-            uint8_t* dst = row + static_cast<size_t>(tx) * 3;
+            uint8_t* dst = dst_rgb888 + (static_cast<size_t>(ty) * dst_w + tx) * 3;
             if (dst[0] == 0xFF && dst[1] == 0xFF && dst[2] == 0xFF) {
                 const int32_t sx_i =
                     (tx < static_cast<uint16_t>(cx_lo)) ? cx_lo
@@ -132,7 +193,7 @@ bool frame_adapter_convert(
     }
 
     out_tf.valid = true;
-    out_tf.scale = scale;
+    out_tf.scale = 1.0f / step;
     out_tf.pad_x = static_cast<uint16_t>(off_x_f + 0.5f);
     out_tf.pad_y = static_cast<uint16_t>(off_y_f + 0.5f);
     out_tf.src_w = src.width;

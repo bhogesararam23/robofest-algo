@@ -223,6 +223,12 @@ constexpr uint16_t VISION_CONTOUR_MIN_BLOB_AREA_PX = 48;
 // Turn-angle threshold for contour-based corner counting (degrees).
 constexpr float VISION_CONTOUR_CORNER_ANGLE_DEG = 35.0f;
 
+// --- Lens undistortion (item 20, REQ-DER-120) ---
+// Applies config/camera_intrinsics.h via precomputed inverse map before the
+// frame adapter runs. Costs one O(N) gather per frame; disable on marginal
+// hardware.
+constexpr bool VISION_UNDISTORT_ENABLED = true;
+
 // tunable implementation default
 constexpr bool VISION_ATTITUDE_COMPENSATION_ENABLED = true;
 
@@ -704,6 +710,26 @@ constexpr uint8_t HUMAN_MODEL_RUN_DIVIDER = 4;
 
 // Confidence floor applied to model outputs before they leave the HAL.
 constexpr float HUMAN_MODEL_CONFIDENCE_MIN = 0.55f;
+
+
+// ============================================================================
+// STAGE PROFILER BUDGETS (ITEM 18, REQ-DER-118)
+// ----------------------------------------------------------------------------
+// Hard per-stage execution budgets in microseconds. Vision stages must sum
+// comfortably under the 66 ms vision period; the control stage under the
+// 20 ms main loop period. Overruns raise profiler alerts (bench failures).
+// ============================================================================
+
+constexpr uint32_t PROF_BUDGET_FRAME_US = 8000UL;
+constexpr uint32_t PROF_BUDGET_ENHANCE_US = 12000UL;
+constexpr uint32_t PROF_BUDGET_SEGMENT_US = 15000UL;
+constexpr uint32_t PROF_BUDGET_MORPH_US = 6000UL;
+constexpr uint32_t PROF_BUDGET_BLOBS_US = 12000UL;
+constexpr uint32_t PROF_BUDGET_TRACKS_US = 4000UL;
+constexpr uint32_t PROF_BUDGET_CONTROL_US = 10000UL;
+
+// Interval between [PROF] dump bursts on the diagnostic log (ms).
+constexpr uint32_t PROF_DUMP_INTERVAL_MS = 5000UL;
 
 // ============================================================================
 // SWARM COMMUNICATION THRESHOLDS
