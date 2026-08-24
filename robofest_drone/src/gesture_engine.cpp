@@ -37,7 +37,6 @@ inline float dist2(float ax, float ay, float bx, float by) {
 void GestureEngine::reset() {
     state_ = State::IDLE;
     presence_start_ms_ = 0;
-    last_move_ms_ = 0;
     last_emit_ms_ = 0;
     cooldown_end_ms_ = 0;
     anchor_cx_ = 0.0f;
@@ -48,7 +47,15 @@ void GestureEngine::reset() {
 void GestureEngine::emit(
     Types::CommandType cmd,
     Types::CommandSample& out,
-    const HandObservation& obs) {
+    const HandObservation& obs,
+    bool force) {
+    // Hard lockout: no emission may land inside the cooldown window even if
+    // the state machine re-entered TRACKING via a quick hand removal.
+    // STOP_ABORT bypasses the lockout: it is a safety command and an abrupt
+    // hand withdrawal after a hold is exactly how an operator shouts it.
+    if (!force && last_emit_ms_ != 0 && obs.timestamp_ms < cooldown_end_ms_) {
+        return;
+    }
     out.valid = true;
     out.command = cmd;
     out.confidence = 0.85f;
@@ -71,7 +78,7 @@ bool GestureEngine::update(const HandObservation& obs, Types::CommandSample& out
             if (obs.present) {
                 state_ = State::TRACKING;
                 presence_start_ms_ = obs.timestamp_ms;
-                last_move_ms_ = obs.timestamp_ms;
+                last_seen_ms_ = obs.timestamp_ms;
                 anchor_cx_ = obs.cx;
                 anchor_cy_ = obs.cy;
                 pending_hold_cmd_ = Types::CommandType::START;
@@ -82,9 +89,9 @@ bool GestureEngine::update(const HandObservation& obs, Types::CommandSample& out
             if (!obs.present) {
                 // Abrupt exit after sustained hold => stop candidate.
                 const uint32_t held =
-                    last_move_ms_ - presence_start_ms_;
+                    last_seen_ms_ - presence_start_ms_;
                 if (held >= STOP_EXIT_AFTER_MS &&
-                    (obs.timestamp_ms - last_move_ms_) <= STOP_EXIT_WINDOW_MS &&
+                    (obs.timestamp_ms - last_seen_ms_) <= STOP_EXIT_WINDOW_MS &&
                     pending_hold_cmd_ != Types::CommandType::NONE) {
                     emit(Types::CommandType::STOP_ABORT, out, obs);
                 } else {
@@ -125,24 +132,41 @@ bool GestureEngine::update(const HandObservation& obs, Types::CommandSample& out
                     pending_hold_cmd_ != Types::CommandType::NONE) {
                     emit(pending_hold_cmd_, out, obs);
                 }
-            } else {
-                // Drifted: re-anchor so slow hand wander doesn't fake sweeps.
-                if ((obs.timestamp_ms - last_move_ms_) > 150UL) {
-                    anchor_cx_ = obs.cx;
-                    anchor_cy_ = obs.cy;
-                    presence_start_ms_ = obs.timestamp_ms; // hold timer restarts
-                    last_move_ms_ = obs.timestamp_ms;
-                }
+            } else if (since_anchor > SWEEP_WINDOW_MS &&
+                       since_anchor > PUSH_WINDOW_MS) {
+                // Slow wander after the gesture windows closed: re-anchor so
+                // the hold timer reflects the new resting position instead of
+                // eventually faking a START.
+                anchor_cx_ = obs.cx;
+                anchor_cy_ = obs.cy;
+                presence_start_ms_ = obs.timestamp_ms;
             }
+            last_seen_ms_ = obs.timestamp_ms;
             break;
         }
 
         case State::COOLDOWN:
-            if (!obs.present ||
-                obs.timestamp_ms >= cooldown_end_ms_) {
-                if (obs.timestamp_ms >= cooldown_end_ms_) {
+            // Absence right after a matured hold is the STOP_ABORT gesture:
+            // the operator pulled their hand away sharply. This bypasses the
+            // lockout on purpose (safety command).
+            if (!obs.present) {
+                const uint32_t held =
+                    last_seen_ms_ - presence_start_ms_;
+                if (held >= STOP_EXIT_AFTER_MS &&
+                    (obs.timestamp_ms - last_seen_ms_) <= STOP_EXIT_WINDOW_MS &&
+                    pending_hold_cmd_ != Types::CommandType::NONE) {
+                    emit(Types::CommandType::STOP_ABORT, out, obs, /*force=*/true);
+                } else {
                     state_ = State::IDLE;
                 }
+            } else if (obs.timestamp_ms >= cooldown_end_ms_) {
+                state_ = State::IDLE;
+                presence_start_ms_ = obs.timestamp_ms;
+                last_seen_ms_ = obs.timestamp_ms;
+                anchor_cx_ = obs.cx;
+                anchor_cy_ = obs.cy;
+                pending_hold_cmd_ = Types::CommandType::START;
+                state_ = State::TRACKING;
             }
             break;
     }
