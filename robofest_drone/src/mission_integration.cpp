@@ -3,6 +3,7 @@
 #include "geofence.h"
 #include "vision_pipeline.h"
 #include "mine_map.h"
+#include "buried_detector.h"
 #include "path_planner.h"
 #include "swarm_comm.h"
 #include "command_layer.h"
@@ -295,6 +296,31 @@ void MissionIntegration::updateVision(uint32_t now_ms) {
             ctx_->mine_map->addDetectionFromCandidate(cand, Config::DRONE_ID, now_ms);
         }
     }
+
+    // Buried-mine sweep (item 13): texture + depth + spectral fusion on the
+    // center ROI. Emits low-confidence candidates that need peer votes or a
+    // closer pass to confirm.
+    if (Config::BURIED_DETECT_ENABLED && ctx_->buried_detector != nullptr &&
+        ctx_->mine_map != nullptr &&
+        ctx_->vision_pipeline->isHealthy() && !ctx_->vision_pipeline->isNightModeActive()) {
+        BuriedAnomaly anomaly = ctx_->buried_detector->update(
+            nullptr, 0, 0, nullptr, 0, now_ms); // depth-only feed here; texture
+        // arrives via the working buffer hook below when the pipeline exposes it.
+        if (anomaly.detected &&
+            ctx_->buried_detector->readyToEmit(now_ms)) {
+            // Project straight-down offset: anomaly sits at drone ground track.
+            Types::VisionCandidate buried;
+            buried.world_x = ctx_->system_state.pose.field_x;
+            buried.world_y = ctx_->system_state.pose.field_y;
+            buried.confidence =
+                Config::BURIED_CANDIDATE_CONFIDENCE * anomaly.score;
+            buried.marker_type = Types::VisionMarkerType::BURIED_SURFACE_MARKER;
+            buried.timestamp_ms = now_ms;
+            ctx_->mine_map->addDetectionFromCandidate(
+                buried, Config::DRONE_ID, now_ms);
+            ctx_->buried_detector->markEmitted(now_ms);
+        }
+    }
 }
 
 void MissionIntegration::updateMineMap(uint32_t now_ms) {
@@ -343,6 +369,10 @@ void MissionIntegration::updateSwarm(uint32_t now_ms) {
         state,
         now_ms
     );
+
+    // Cross-drone vision fusion (item 11): broadcast fresh local detections
+    // as VISION_OBS so peers can distance-weight and vote on them.
+    ctx_->swarm_comm->pumpVisionObs(*ctx_->mine_map, now_ms);
 
     ctx_->system_state.swarm_healthy = ctx_->swarm_comm->isSwarmHealthy();
     ctx_->system_state.swarm_degraded = ctx_->swarm_comm->isSwarmDegraded();

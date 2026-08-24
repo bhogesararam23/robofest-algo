@@ -112,7 +112,8 @@ enum class PacketType : uint8_t {
     PATH_UPDATE,
     PERSON_UPDATE,
     HELP_REQUEST,
-    LAND_NOW
+    LAND_NOW,
+    VISION_OBS
 };
 
 enum class MarkerPattern : uint8_t {
@@ -156,6 +157,33 @@ enum class VisionMarkerType : uint8_t {
     MARKER_PINK = 8,
     MARKER_WHITE = 9,
     MARKER_BLACK = 10
+};
+
+// ============================================================================
+// CROSS-DRONE VISION FUSION PAYLOAD (REQ-DER-111, item 11)
+// ----------------------------------------------------------------------------
+// Raw single-sight observation shared before map confirmation so peers can
+// fuse positions with distance/confidence weighting and vote on marker
+// classification (REQ-DER-112, item 12). Encoded manually into packet
+// payload like MINE_UPDATE (little-endian memcpy convention).
+// ============================================================================
+
+struct VisionObsPayload {
+    float x = 0.0f;                  // world-frame position
+    float y = 0.0f;
+    float confidence = 0.0f;         // 0..100 reporter confidence
+    float observer_distance_m = 0.0f;// reporter->marker ground distance
+    uint16_t mine_hash = 0;          // spatial hash for cross-referencing
+    VisionMarkerType marker_type = VisionMarkerType::UNKNOWN; // classification vote
+};
+
+// Consensus verdict for a marker's classification across the swarm.
+struct MarkerConsensus {
+    VisionMarkerType winning_type = VisionMarkerType::UNKNOWN;
+    uint8_t winning_votes = 0;
+    uint8_t total_votes = 0;
+    float weighted_agreement = 0.0f; // winning weight / total weight, 0..1
+    bool ambiguous = false;          // true => ignore or dispatch closer look
 };
 
 enum class FcCommand : uint8_t {
@@ -260,6 +288,9 @@ struct VisionCandidate {
     uint32_t timestamp_ms = 0;
 };
 
+// Per-mine classification vote history depth (items 11/12).
+constexpr uint8_t MINE_OBS_HISTORY = 6;
+
 struct MineRecord {
     uint16_t mine_id = 0;
     float x = 0.0f;
@@ -280,6 +311,35 @@ struct MineRecord {
 
     uint16_t rejection_reason = 0;
     uint16_t update_count = 0;
+
+    // Fusion/consensus bookkeeping (items 11/12):
+    VisionMarkerType obs_types[MINE_OBS_HISTORY] = {};
+    float obs_weights[MINE_OBS_HISTORY] = {};
+    float obs_pos_x[MINE_OBS_HISTORY] = {};
+    float obs_pos_y[MINE_OBS_HISTORY] = {};
+    uint8_t obs_n = 0;
+    bool obs_shared = false;   // local detection already broadcast as VISION_OBS
+};
+
+// ============================================================================
+// THREAT / LANDING KINEMATICS TYPES (item 14 + moving-target landing item 6n)
+// ============================================================================
+
+// Obstacle state relative to the drone, body frame (x forward, y right).
+struct RelativeObstacle {
+    bool valid = false;
+    float rel_x = 0.0f;
+    float rel_y = 0.0f;
+    float rel_vx = 0.0f;   // relative velocity (obstacle - drone), m/s
+    float rel_vy = 0.0f;
+};
+
+// Ground-target position sample for the landing predictor.
+struct TargetKinematicSample {
+    bool valid = false;
+    uint32_t timestamp_ms = 0;
+    float field_x = 0.0f;
+    float field_y = 0.0f;
 };
 
 struct PathWaypoint {

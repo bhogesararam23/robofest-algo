@@ -254,6 +254,158 @@ void MineMap::addDetectionFromCandidate(
 
 
 // ============================================================================
+// CROSS-DRONE VISION FUSION + CLASSIFICATION CONSENSUS
+// (items 11/12, REQ-DER-111/112)
+// ============================================================================
+
+float MineMap::vision_obs_weight(float confidence, float distance_m) {
+    if (confidence <= 0.0f || distance_m < 0.0f || !std::isfinite(distance_m)) {
+        return 0.0f;
+    }
+    const float ref2 = Config::VISION_FUSION_REF_DISTANCE_M *
+                       Config::VISION_FUSION_REF_DISTANCE_M;
+    const float conf = std::min(confidence, 100.0f) / 100.0f;
+    return conf / (1.0f + (distance_m * distance_m) / ref2);
+}
+
+bool MineMap::resolve_votes(
+    const Types::VisionMarkerType* types,
+    const float* weights,
+    uint8_t n,
+    Types::MarkerConsensus& out) {
+
+    out = Types::MarkerConsensus();
+    if (types == nullptr || weights == nullptr || n == 0) return false;
+
+    // Weighted votes per marker type (UNKNOWN votes dilute but never win).
+    float weight_by_type[16] = {};
+    uint8_t count_by_type[16] = {};
+    float total_weight = 0.0f;
+
+    for (uint8_t i = 0; i < n; ++i) {
+        const uint8_t t = static_cast<uint8_t>(types[i]);
+        if (t >= 16) continue;
+        weight_by_type[t] += weights[i];
+        count_by_type[t]++;
+        total_weight += weights[i];
+    }
+    if (total_weight <= 0.0f) return false;
+
+    uint8_t best = static_cast<uint8_t>(Types::VisionMarkerType::UNKNOWN);
+    float best_w = 0.0f;
+    for (uint8_t t = 1; t < 16; ++t) { // skip UNKNOWN(0) as a winner
+        if (weight_by_type[t] > best_w) {
+            best_w = weight_by_type[t];
+            best = t;
+        }
+    }
+    if (best == 0u || best_w <= 0.0f) {
+        out.total_votes = n;
+        out.weighted_agreement = 0.0f;
+        out.ambiguous = true;
+        return true;
+    }
+
+    out.winning_type = static_cast<Types::VisionMarkerType>(best);
+    out.winning_votes = count_by_type[best];
+    out.total_votes = n;
+    out.weighted_agreement = best_w / total_weight;
+
+    // Ambiguity policy (item 12): split votes OR too little accumulated
+    // evidence both mark the classification untrusted.
+    out.ambiguous =
+        (out.weighted_agreement < Config::MARKER_CONSENSUS_AGREEMENT_MIN) ||
+        (total_weight < Config::MARKER_CONSENSUS_MIN_WEIGHT);
+    return true;
+}
+
+void MineMap::addVisionObservation(
+    const Types::VisionObsPayload& obs,
+    uint8_t source_drone_id,
+    uint32_t now_ms) {
+
+    if (!std::isfinite(obs.x) || !std::isfinite(obs.y) ||
+        obs.confidence < 0.0f || obs.confidence > 100.0f ||
+        obs.observer_distance_m < 0.0f) {
+        setTelemetryEvent(TE_MINE_REJECTED_INVALID_INPUT);
+        return;
+    }
+
+    // Position fusion through the standard dedup path with the observer's
+    // confidence; distance weighting is applied on top below.
+    addDetection(obs.x, obs.y, obs.confidence, obs.marker_type,
+                 source_drone_id, now_ms);
+
+    const int idx = findNearestMine(
+        obs.x, obs.y,
+        (source_drone_id == self_drone_id_)
+            ? Config::SAME_DRONE_DEDUP_RADIUS_M
+            : Config::CROSS_DRONE_DEDUP_RADIUS_M);
+    if (idx < 0) return;
+
+    Types::MineRecord& m = mines_[idx];
+
+    // Distance-weighted position refinement (item 11): closer observers pull
+    // the fused position harder than distant ones.
+    const float w = vision_obs_weight(obs.confidence, obs.observer_distance_m);
+    if (w > 0.0f) {
+        const uint8_t slot = (m.obs_n < Types::MINE_OBS_HISTORY)
+            ? m.obs_n
+            : static_cast<uint8_t>(Types::MINE_OBS_HISTORY - 1);
+        m.obs_types[slot] = obs.marker_type;
+        m.obs_weights[slot] = w;
+        m.obs_pos_x[slot] = obs.x;
+        m.obs_pos_y[slot] = obs.y;
+        if (m.obs_n < Types::MINE_OBS_HISTORY) m.obs_n++;
+
+        // Pull fused world position toward high-weight observations.
+        const float pull = std::min(0.25f, w);
+        m.x = m.x * (1.0f - pull) + obs.x * pull;
+        m.y = m.y * (1.0f - pull) + obs.y * pull;
+    }
+}
+
+Types::MarkerConsensus MineMap::getMarkerConsensus(uint16_t mine_id) const {
+    Types::MarkerConsensus out;
+    for (uint16_t i = 0; i < mine_count_; ++i) {
+        if (mines_[i].mine_id != mine_id) continue;
+        resolve_votes(mines_[i].obs_types, mines_[i].obs_weights,
+                      mines_[i].obs_n, out);
+        break;
+    }
+    return out;
+}
+
+bool MineMap::isMarkerAmbiguous(uint16_t mine_id) const {
+    for (uint16_t i = 0; i < mine_count_; ++i) {
+        if (mines_[i].mine_id != mine_id) continue;
+        Types::MarkerConsensus c;
+        if (!resolve_votes(mines_[i].obs_types, mines_[i].obs_weights,
+                           mines_[i].obs_n, c)) {
+            return false; // no data: not ambiguous, just unknown
+        }
+        return c.ambiguous;
+    }
+    return false;
+}
+
+void MineMap::markObsShared(uint16_t mine_id) {
+    for (uint16_t i = 0; i < mine_count_; ++i) {
+        if (mines_[i].mine_id == mine_id) {
+            mines_[i].obs_shared = true;
+            return;
+        }
+    }
+}
+
+bool MineMap::getMineByIndex(uint16_t index, Types::MineRecord& out) const {
+    if (index >= mine_count_) return false;
+    out = mines_[index];
+    return true;
+}
+
+
+// ============================================================================
 // CONFIRMATION & DECAY
 // ============================================================================
 

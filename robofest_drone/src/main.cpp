@@ -26,6 +26,7 @@
 #include "mine_map.h"
 #include "path_planner.h"
 #include "swarm_comm.h"
+#include "buried_detector.h"
 #include "search_behavior.h"
 #include "command_layer.h"
 #include "human_tracker.h"
@@ -49,6 +50,7 @@ static VisionPipeline s_vision_pipeline;
 static MineMap s_mine_map;
 static PathPlanner s_path_planner;
 static SwarmComm s_swarm_comm;
+static BuriedDetector s_buried_detector;
 static CommandLayer s_command_layer;
 static HumanTracker s_human_tracker;
 static MarkerController s_marker_controller;
@@ -172,6 +174,7 @@ void robofest_setup() {
     s_system_context.mine_map = &s_mine_map;
     s_system_context.path_planner = &s_path_planner;
     s_system_context.swarm_comm = &s_swarm_comm;
+    s_system_context.buried_detector = &s_buried_detector;
     s_system_context.command_layer = &s_command_layer;
     s_system_context.human_tracker = &s_human_tracker;
     s_system_context.marker_controller = &s_marker_controller;

@@ -1060,5 +1060,67 @@ constexpr bool TELEMETRY_FLUSH_BEFORE_LANDING = true;
 // tunable implementation default
 constexpr uint16_t TELEMETRY_CRITICAL_QUEUE_SIZE = 16;
 
+
+// ============================================================================
+// CROSS-DRONE VISION FUSION & CONSENSUS (ITEMS 11/12, REQ-DER-111/112)
+// ============================================================================
+
+// Observation weight = confidence * 1/(1 + distance^2 / REF_DIST^2).
+constexpr float VISION_FUSION_REF_DISTANCE_M = 2.5f;
+
+// Minimum weighted agreement for a classification to be trusted.
+constexpr float MARKER_CONSENSUS_AGREEMENT_MIN = 0.60f;
+
+// Below this total vote weight the marker is flagged ambiguous regardless.
+constexpr float MARKER_CONSENSUS_MIN_WEIGHT = 0.8f;
+
+// Interval between VISION_OBS broadcasts of not-yet-shared local detections.
+constexpr uint32_t VISION_OBS_BROADCAST_INTERVAL_MS = 500UL;
+
+
+// ============================================================================
+// BURIED-MINE DETECTION (ITEM 13, REQ-DER-113 + multispectral hooks item 3n)
+// ============================================================================
+
+constexpr bool BURIED_DETECT_ENABLED = true;
+
+// Texture anomaly: local variance must exceed this multiple of the field mean.
+constexpr float BURIED_TEXTURE_RATIO_MIN = 1.8f;
+
+// Plane-fit residual (m) above which soil is considered disturbed.
+constexpr float BURIED_PLANE_RESIDUAL_M = 0.035f;
+
+// Combined anomaly score required to emit a buried-mine candidate.
+constexpr float BURIED_SCORE_EMIT_MIN = 0.55f;
+
+// Buried candidates enter the map with this confidence (needs peer votes or
+// a closer pass to confirm).
+constexpr float BURIED_CANDIDATE_CONFIDENCE = 40.0f;
+
+// Multispectral index weights (NDVI proxy etc.). With no NIR provider these
+// act as RGB-proxy vegetation stress indicators.
+constexpr float BURIED_NDVI_WEIGHT = 0.25f;
+constexpr float BURIED_MOISTURE_WEIGHT = 0.15f;
+
+
+// ============================================================================
+// DYNAMIC OBSTACLE TTC & MOVING-TARGET LANDING (ITEMS 14 / 6n)
+// ============================================================================
+
+// Evasion triggers when predicted time-to-collision falls below this.
+constexpr float OBSTACLE_TTC_CRITICAL_S = 2.0f;
+
+// Obstacles closer than this are treated as immediate (TTC ~ 0).
+constexpr float OBSTACLE_IMMEDIATE_RADIUS_M = 0.6f;
+
+// Moving-target landing: constant-velocity prediction horizon (s).
+constexpr float LANDING_PREDICT_HORIZON_S = 1.5f;
+
+// Terminal visual-servo gain: descent velocity scales with pixel error.
+constexpr float LANDING_SERVO_GAIN_PX_TO_MPS = 0.004f;
+
+// Target is "centered" when lateral servo error < this many native px.
+constexpr float LANDING_SERVO_TOLERANCE_PX = 12.0f;
+
 } // namespace Config
 } // namespace RobofestDrone

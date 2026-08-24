@@ -219,6 +219,8 @@ constexpr uint16_t TE_SWARM_LAND_NOW_RECEIVED                = 2524;
 constexpr uint16_t TE_SWARM_PACKET_INVALID                   = 2525;
 constexpr uint16_t TE_SWARM_PACKET_STALE                     = 2526;
 constexpr uint16_t TE_SWARM_RADIO_UNHEALTHY                  = 2527;
+constexpr uint16_t TE_SWARM_VISION_OBS_SENT                  = 2528;
+constexpr uint16_t TE_SWARM_VISION_OBS_RECEIVED              = 2529;
 
 
 // ============================================================================

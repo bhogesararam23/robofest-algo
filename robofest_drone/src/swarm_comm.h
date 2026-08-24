@@ -77,6 +77,17 @@ public:
     bool broadcastHelpRequest(uint8_t reason, uint32_t now_ms);
     bool broadcastLandNow(uint8_t reason, uint32_t now_ms);
 
+    // Cross-drone vision fusion (item 11): share one raw observation.
+    bool broadcastVisionObs(const Types::VisionObsPayload& obs, uint32_t now_ms);
+
+    // Periodic sweep: broadcasts not-yet-shared local detections as
+    // VISION_OBS packets (rate-limited, few per call). Call from the mission
+    // loop alongside updateWithMissionData.
+    void pumpVisionObs(MineMap& mine_map, uint32_t now_ms);
+
+    uint32_t getVisionObsSentCount() const { return vision_obs_sent_; }
+    uint32_t getVisionObsReceivedCount() const { return vision_obs_received_; }
+
     bool receivedLandNow() const { return received_land_now_; }
     uint8_t getLandNowReason() const { return land_now_reason_; }
 
@@ -112,6 +123,7 @@ private:
     void handlePersonUpdate(const Types::SwarmPacket& packet, uint32_t now_ms);
     void handleHelpRequest(const Types::SwarmPacket& packet, uint32_t now_ms);
     void handleLandNow(const Types::SwarmPacket& packet, uint32_t now_ms);
+    void handleVisionObs(const Types::SwarmPacket& packet, MineMap* optional_mine_map, uint32_t now_ms);
 
     void updatePeerStatus(uint32_t now_ms);
     uint8_t getCoordinatorDroneId() const;
@@ -140,6 +152,10 @@ private:
 
     bool received_land_now_ = false;
     uint8_t land_now_reason_ = 0;
+
+    uint32_t vision_obs_sent_ = 0;
+    uint32_t vision_obs_received_ = 0;
+    uint32_t last_vision_obs_pump_ms_ = 0;
 
     uint32_t last_heartbeat_send_ms_ = 0;
     uint32_t last_mine_update_send_ms_ = 0;

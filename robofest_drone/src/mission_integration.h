@@ -24,6 +24,7 @@ class FcBridge;
 class StateMachine;
 class SearchBehavior;
 class Telemetry;
+class BuriedDetector;
 
 // ============================================================================
 // SYSTEM CONTEXT STRUCTURE
@@ -44,6 +45,7 @@ struct SystemContext {
     StateMachine* state_machine = nullptr;
     SearchBehavior* search_behavior = nullptr;
     Telemetry* telemetry = nullptr;
+    BuriedDetector* buried_detector = nullptr;
 
     SystemState system_state;
     Types::OpticalFlowSample latest_flow;

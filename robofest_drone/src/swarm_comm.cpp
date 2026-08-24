@@ -635,6 +635,91 @@ void SwarmComm::handleLandNow(const Types::SwarmPacket& packet, uint32_t now_ms)
     setTelemetryEvent(TE_SWARM_LAND_NOW_RECEIVED);
 }
 
+// ============================================================================
+// CROSS-DRONE VISION FUSION (item 11, REQ-DER-111)
+// ============================================================================
+
+bool SwarmComm::broadcastVisionObs(const Types::VisionObsPayload& obs, uint32_t now_ms) {
+    Types::SwarmPacket packet;
+    packet.packet_type = Types::PacketType::VISION_OBS;
+    packet.packet_version = Config::SWARM_PACKET_VERSION;
+    packet.sender_drone_id = self_drone_id_;
+    packet.timestamp_ms = now_ms;
+
+    uint16_t offset = 0;
+    std::memcpy(&packet.payload[offset], &obs.x, sizeof(obs.x)); offset += sizeof(obs.x);
+    std::memcpy(&packet.payload[offset], &obs.y, sizeof(obs.y)); offset += sizeof(obs.y);
+    std::memcpy(&packet.payload[offset], &obs.confidence, sizeof(obs.confidence)); offset += sizeof(obs.confidence);
+    std::memcpy(&packet.payload[offset], &obs.observer_distance_m, sizeof(obs.observer_distance_m)); offset += sizeof(obs.observer_distance_m);
+    std::memcpy(&packet.payload[offset], &obs.mine_hash, sizeof(obs.mine_hash)); offset += sizeof(obs.mine_hash);
+    const uint8_t mt = static_cast<uint8_t>(obs.marker_type);
+    std::memcpy(&packet.payload[offset], &mt, sizeof(mt)); offset += sizeof(mt);
+
+    packet.payload_length = offset;
+    bool ok = Hal::hal_radio_send(packet);
+    if (ok) {
+        vision_obs_sent_++;
+        setTelemetryEvent(TE_SWARM_VISION_OBS_SENT);
+    }
+    return ok;
+}
+
+void SwarmComm::handleVisionObs(const Types::SwarmPacket& packet, MineMap* optional_mine_map, uint32_t now_ms) {
+    if (packet.payload_length < 21 || optional_mine_map == nullptr) return;
+
+    Types::VisionObsPayload obs;
+    uint16_t hash = 0;
+    uint8_t mt = 0;
+
+    uint16_t offset = 0;
+    std::memcpy(&obs.x, &packet.payload[offset], sizeof(obs.x)); offset += sizeof(obs.x);
+    std::memcpy(&obs.y, &packet.payload[offset], sizeof(obs.y)); offset += sizeof(obs.y);
+    std::memcpy(&obs.confidence, &packet.payload[offset], sizeof(obs.confidence)); offset += sizeof(obs.confidence);
+    std::memcpy(&obs.observer_distance_m, &packet.payload[offset], sizeof(obs.observer_distance_m)); offset += sizeof(obs.observer_distance_m);
+    std::memcpy(&hash, &packet.payload[offset], sizeof(hash)); offset += sizeof(hash);
+    std::memcpy(&mt, &packet.payload[offset], sizeof(mt)); offset += sizeof(mt);
+
+    obs.mine_hash = hash;
+    obs.marker_type = static_cast<Types::VisionMarkerType>(mt);
+
+    optional_mine_map->addVisionObservation(obs, packet.sender_drone_id, now_ms);
+    vision_obs_received_++;
+    setTelemetryEvent(TE_SWARM_VISION_OBS_RECEIVED);
+}
+
+void SwarmComm::pumpVisionObs(MineMap& mine_map, uint32_t now_ms) {
+    if ((now_ms - last_vision_obs_pump_ms_) < Config::VISION_OBS_BROADCAST_INTERVAL_MS) {
+        return;
+    }
+    last_vision_obs_pump_ms_ = now_ms;
+
+    // Share up to two not-yet-broadcast local detections per pump cycle so a
+    // fresh discovery reaches peers within ~1-2 s without flooding the link.
+    const uint16_t count = mine_map.getMineCount();
+    uint8_t shared_this_pump = 0;
+
+    for (uint16_t i = 0; i < count && shared_this_pump < 2; ++i) {
+        Types::MineRecord m;
+        if (!mine_map.getMineByIndex(i, m)) continue;
+        if (m.obs_shared) continue;
+        if (m.source_drone_id != self_drone_id_) continue;
+
+        Types::VisionObsPayload obs;
+        obs.x = m.x;
+        obs.y = m.y;
+        obs.confidence = m.confidence;
+        obs.observer_distance_m = 0.5f;  // own detection: close-range by policy
+        obs.mine_hash = computeMineHash(m.x, m.y);
+        obs.marker_type = m.marker_type;
+
+        if (broadcastVisionObs(obs, now_ms)) {
+            shared_this_pump++;
+            // Mark shared through the map so we do not re-send every cycle.
+            mine_map.markObsShared(m.mine_id);
+        }
+    }
+}
+
 void SwarmComm::handlePacket(const Types::SwarmPacket& packet, MineMap* optional_mine_map, uint32_t now_ms) {
     if (packet.packet_version != Config::SWARM_PACKET_VERSION) {
         setTelemetryEvent(TE_SWARM_PACKET_INVALID);
@@ -665,6 +750,7 @@ void SwarmComm::handlePacket(const Types::SwarmPacket& packet, MineMap* optional
         case Types::PacketType::PERSON_UPDATE: handlePersonUpdate(packet, now_ms); break;
         case Types::PacketType::HELP_REQUEST:  handleHelpRequest(packet, now_ms); break;
         case Types::PacketType::LAND_NOW:      handleLandNow(packet, now_ms); break;
+        case Types::PacketType::VISION_OBS:    handleVisionObs(packet, optional_mine_map, now_ms); break;
         default: break;
     }
 }

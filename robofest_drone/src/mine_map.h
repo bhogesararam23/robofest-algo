@@ -36,6 +36,42 @@ public:
         uint32_t now_ms
     );
 
+    // ------------------------------------------------------------------
+    // CROSS-DRONE FUSION + CLASSIFICATION CONSENSUS
+    // (items 11/12, REQ-DER-111/112)
+    // ------------------------------------------------------------------
+
+    // Fuses one peer observation: confidence x inverse-distance weighted
+    // position merge plus a classification vote into the marker's history.
+    void addVisionObservation(
+        const Types::VisionObsPayload& obs,
+        uint8_t source_drone_id,
+        uint32_t now_ms
+    );
+
+    // Computes the current classification consensus for a mine.
+    Types::MarkerConsensus getMarkerConsensus(uint16_t mine_id) const;
+
+    // True when the swarm should ignore this marker's classification
+    // (votes too split / weight too low) per REQ item 12 policy.
+    bool isMarkerAmbiguous(uint16_t mine_id) const;
+
+    // Marks a local detection as already shared via VISION_OBS broadcast.
+    void markObsShared(uint16_t mine_id);
+
+    // Index-ordered access for swarm pump sweeps.
+    bool getMineByIndex(uint16_t index, Types::MineRecord& out) const;
+
+    // Pure scoring helper (host-testable): inverse-distance-squared weight.
+    static float vision_obs_weight(float confidence, float distance_m);
+
+    // Pure vote resolver (host-testable).
+    static bool resolve_votes(
+        const Types::VisionMarkerType* types,
+        const float* weights,
+        uint8_t n,
+        Types::MarkerConsensus& out);
+
     void update(uint32_t now_ms);
 
     uint16_t getMineCount() const;
