@@ -37,7 +37,31 @@ Perform this checklist on the competition field before initiating takeoff:
 
 ---
 
-## 4. Stage 3: Tethered & Low-Altitude Flight Testing
+## 4. Stage 2-V: Vision System Pre-Flight Checklist (REQ item 21)
+
+Run this section in order before any flight that depends on mine detection, human tracking, or path guidance. Steps V.1–V.5 are bench steps; V.6–V.9 are field steps.
+
+### Bench (propellers off)
+
+- [ ] **V.1 Lens & Illuminator Cleanliness**: Inspect and clean the OV5640 lens, optical-flow lens, and IR illuminator (if fitted) with a microfiber cloth. One fingerprint can halve blob contrast at 2 m altitude.
+- [ ] **V.2 Camera Focus Check**: Place a marker board on the floor at the mission altitude distance (~2.0 m). Confirm sharp edges in a saved snapshot; adjust lens barrel if textures smear.
+- [ ] **V.3 Camera Calibration File Present**: Confirm `config/vision_profiles_generated.h` exists and `scripts/gen_vision_profiles.py --check` passes, and (after Phase 7) `config/camera_intrinsics.h` matches the physically mounted camera module. A missing/stale file silently degrades detection accuracy.
+- [ ] **V.4 Vision Self-Test**: Run the onboard bench self-test (`bench_self_test`) and confirm the camera frame counter advances and processing time stays within budget (< 66 ms vision slot).
+- [ ] **V.5 Marker Physical Verification**: Lay out one physical sample of each competition marker type (RED mine circle, YELLOW buried-marker circle, plus any color/shape variants used). Confirm each is undamaged, matte, correctly sized, and not faded.
+
+### Field (pre-arm)
+
+- [ ] **V.6 Lighting Condition Assessment**: Estimate ambient illumination (sunny / overcast / artificial / dusk). If conditions differ from the last calibration session, run `calibration_mode` / HSV tuner for at least the RED and YELLOW profiles before arming.
+- [ ] **V.7 Shadow & Glare Scan**: Hover-free check: power the vision stack while holding the drone ~2 m over the actual field soil. Confirm no sun glare hotspot or hard shadow band dominates the frame mean-V telemetry; reposition launch point or wait for cloud cover if it does.
+- [ ] **V.8 Live Detection Smoke Test**: At ~2 m, confirm live detection of the V.5 test markers with confidence ≥ `CONFIDENCE_REPORT_MIN` (45%) and correct shape classification; verify zero persistent false positives on bare soil patches.
+- [ ] **V.9 Night/Low-Light Mode Check** (dusk operations only): Confirm night-mode flag engages, frames brighten without excessive noise streaks, and relaxed thresholds still reject soil texture false positives.
+
+> [!NOTE]
+> Any V-step failure is a no-go for autonomous mine-mapping flight. The swarm may still fly non-vision missions (e.g., pure lidar obstacle survey) at operator discretion.
+
+---
+
+## 5. Stage 3: Tethered & Low-Altitude Flight Testing
 
 - [ ] **3.1 Takeoff Command**: Issue `START` gesture/voice command. Verify smooth autonomous ascent to $2.0\text{ m}$ AGL (`MISSION_ALTITUDE_M`).
 - [ ] **3.2 Station Keeping & Position Hold**: Verify drone holds horizontal position within $\pm 0.20\text{ m}$ without oscillations.
@@ -47,7 +71,7 @@ Perform this checklist on the competition field before initiating takeoff:
 
 ---
 
-## 5. Emergency Response Protocols
+## 6. Emergency Response Protocols
 
 | Scenario | Autonomous Reaction | Manual Safety Action Required |
 | :--- | :--- | :--- |
