@@ -1,1 +1,16 @@
-<?xml version="1.0"?><package format="3"><name>robofest_description</name><version>0.1.0</version><description>URDF/Xacro and Gazebo arena description.</description><maintainer email="team@robofest.local">RoboFest Team</maintainer><license>Apache-2.0</license><buildtool_depend>ament_cmake</buildtool_depend><exec_depend>xacro</exec_depend><exec_depend>robot_state_publisher</exec_depend></package>
+<?xml version="1.0"?>
+<package format="3">
+  <name>robofest_description</name>
+  <version>0.1.0</version>
+  <description>URDF/Xacro and Gazebo arena description.</description>
+  <maintainer email="team@robofest.local">RoboFest Team</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>robot_localization</exec_depend>
+  <exec_depend>robofest_navigation</exec_depend>
+  <exec_depend>robofest_perception</exec_depend>
+  <exec_depend>robofest_drivers</exec_depend>
+  <exec_depend>robofest_mission</exec_depend>
+</package>

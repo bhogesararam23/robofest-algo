@@ -3,3 +3,7 @@ float32 battery_percent
 string current_task
 bool is_available
 robofest_interfaces/MineMap local_map
+uint32 sequence
+string handoff_id
+string handoff_status
+uint8 handoff_target_id

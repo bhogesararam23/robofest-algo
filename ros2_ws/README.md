@@ -18,7 +18,13 @@ This workspace is the ROS 2 translation of the existing RoboFest firmware algori
 
 On a ROS 2 Humble/Iron system, run `cd ros2_ws && rosdep install --from-paths src --ignore-src -r -y && colcon build --symlink-install && . install/setup.bash`. The sandbox used for development does not include ROS 2, so the dependency-free algorithm tests can be run directly with `pytest ros2_ws/src/robofest_navigation/test ros2_ws/src/robofest_simulation/test` and syntax checks with `python3 -m compileall ros2_ws/src`.
 
-The simulation entry point is `ros2 launch robofest_description robofest_simulation.launch.py`; `start_gazebo` defaults to true and `start_sitl` can be enabled when ArduPilot is installed. For a bag export represented as JSON, run `ros2 run robofest_simulation analyze_bag paths.json --mines mines.json --output clearance_report.json`.
+The simulation entry point is `ros2 launch robofest_description robofest_simulation.launch.py`; `start_gazebo` defaults to true and `start_sitl` can be enabled when ArduPilot is installed. The launch graph includes the EKF, optical-flow/ToF sensor adapter, localization heartbeat, fake vision, mapping, planner, bridge, mission, swarm, and safety nodes. For a bag export represented as JSON, run `ros2 run robofest_simulation analyze_bag paths.json --mines mines.json --output clearance_report.json`.
+
+## Flight-critical hardening
+
+The bridge latches `EMERGENCY_STOP`, clears its path, publishes zero velocity setpoints at 50 Hz, and retries `/mavros/cmd/arming` with `value=false` until the disarm deadline. Motion commands are ignored while latched. Recovery requires `/drivers/reset_emergency` after the disarm window and returns to HOLD. The safety node fails closed for missing initial heartbeats, stale odometry, stale heartbeats, and odometry-frame geofence violations; diagnostic reasons are published on `/mission/safety_reason`.
+
+Swarm guidance handoff is an acknowledged protocol carried in the extended `SwarmState` interface. A low-battery guide drone selects an available peer above 50% battery, publishes a `PENDING` handoff with ID and target, and yields only after an `ACK`. Pending requests and accepted leases expire on timeout. Shared mine maps are fused in the navigation map node, while the planner rebuilds the 0.2 m grid on each map update, clears stale paths on `NO_SAFE_PATH`, and periodically replans from the vehicle's current pose.
 
 ## Design notes
 
