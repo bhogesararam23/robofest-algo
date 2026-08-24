@@ -420,7 +420,9 @@ bool code_reader_read_text(
         while (x < w && proj[x] == 0) x++;
         if (x >= w) break;
 
-        // Find end of this glyph band.
+        // Find end of this glyph band. When the loop breaks on a blank,
+        // that blank index IS part of the gap run: blanks occupy
+        // [gx1-gap+1 .. gx1], so the ink-exclusive end is gx1-gap+1.
         uint16_t gx0 = x;
         uint16_t gap = 0;
         uint16_t gx1 = x;
@@ -433,8 +435,18 @@ bool code_reader_read_text(
             }
             gx1++;
         }
-        const uint16_t band_w_raw = (gx1 - gap >= gx0) ? (gx1 - gap - gx0) : 0;
-        if (band_w_raw == 0) break;
+        uint16_t band_end;
+        if (gx1 >= w) {
+            band_end = w; // ran out of image; take everything to the edge
+        } else {
+            band_end = (gx1 > gap) ? static_cast<uint16_t>(gx1 - gap + 1) : 0;
+        }
+        const uint16_t band_w_raw =
+            (band_end > gx0) ? static_cast<uint16_t>(band_end - gx0) : 0;
+        if (band_w_raw == 0) {
+            x = static_cast<uint16_t>(x + 1); // guarantee forward progress
+            continue;
+        }
 
         // Vertical extent of actual ink inside the band.
         uint16_t gy0 = h, gy1 = 0;
@@ -447,7 +459,7 @@ bool code_reader_read_text(
             }
         }
         if (gy1 < gy0) {
-            x = gx1 - gap;
+            x = band_end;
             continue;
         }
 
@@ -498,7 +510,7 @@ bool code_reader_read_text(
             matched++;
         }
 
-        x = gx1 - gap;
+        x = band_end;
     }
 
     if (tlen == 0 || matched == 0 ||
