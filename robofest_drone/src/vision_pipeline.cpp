@@ -1,4 +1,5 @@
 #include "vision_pipeline.h"
+#include "mem.h"
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -16,12 +17,38 @@ namespace {
     // Gray-world blend strength used by exposure normalization (0 = off, 1 = full).
     constexpr float EXPOSURE_GRAY_WORLD_STRENGTH = 0.5f;
 
-    // Static buffers to prevent any heap allocation on the embedded vision update path
-    static uint8_t s_binary_mask[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
-    static uint8_t s_morph_temp[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
-    static uint8_t s_label_snapshot[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
-    static uint16_t s_bfs_x[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
-    static uint16_t s_bfs_y[Config::VISION_PROCESS_WIDTH * Config::VISION_PROCESS_HEIGHT];
+    // Large scratch buffers live in PSRAM (see mem.h) to keep internal DRAM
+    // free for the radio/WiFi stack. Indexed exactly like the former arrays;
+    // allocated once on first use and never freed (process lifetime).
+    static uint8_t* s_binary_mask = nullptr;      // [W*H]
+    static uint8_t* s_morph_temp = nullptr;       // [W*H]
+    static uint8_t* s_label_snapshot = nullptr;   // [W*H]
+    static uint16_t* s_bfs_x = nullptr;           // [W*H] BFS queue X
+    static uint16_t* s_bfs_y = nullptr;           // [W*H] BFS queue Y
+
+    // Returns false if any buffer could not be allocated (OOM).
+    static bool ensure_vision_scratch() {
+        constexpr size_t N =
+            static_cast<size_t>(Config::VISION_PROCESS_WIDTH) *
+            static_cast<size_t>(Config::VISION_PROCESS_HEIGHT);
+        if (s_binary_mask == nullptr) {
+            s_binary_mask = static_cast<uint8_t*>(robofest_big_alloc(N));
+        }
+        if (s_morph_temp == nullptr) {
+            s_morph_temp = static_cast<uint8_t*>(robofest_big_alloc(N));
+        }
+        if (s_label_snapshot == nullptr) {
+            s_label_snapshot = static_cast<uint8_t*>(robofest_big_alloc(N));
+        }
+        if (s_bfs_x == nullptr) {
+            s_bfs_x = static_cast<uint16_t*>(robofest_big_alloc(N * sizeof(uint16_t)));
+        }
+        if (s_bfs_y == nullptr) {
+            s_bfs_y = static_cast<uint16_t*>(robofest_big_alloc(N * sizeof(uint16_t)));
+        }
+        return s_binary_mask != nullptr && s_morph_temp != nullptr &&
+               s_label_snapshot != nullptr && s_bfs_x != nullptr && s_bfs_y != nullptr;
+    }
     static VisionBlob s_extracted_blobs[Config::VISION_MAX_BLOBS];
 
     // Boundary-pixel collection during BFS (subsampled on overflow) plus the
@@ -264,6 +291,12 @@ void VisionPipeline::init() {
     reset();
     Hal::hal_camera_init();
     camera_healthy_ = Hal::hal_camera_is_healthy();
+
+    if (!ensure_vision_scratch()) {
+        Hal::hal_log("[VISION][ERROR] Scratch buffer allocation failed (OOM).");
+        setTelemetryEvent(TE_VISION_MASK_EMPTY);
+        return;
+    }
 
     // Lock camera exposure and white-balance to prevent auto-adjustment from
     // invalidating calibrated HSV values mid-flight.
@@ -572,7 +605,10 @@ void VisionPipeline::measureExposureAndLighting(const Hal::CameraFrame& frame, u
 // ============================================================================
 
 void VisionPipeline::segmentMultiLabelMask(const Hal::CameraFrame& frame) {
-    std::memset(s_binary_mask, 0, sizeof(s_binary_mask));
+    constexpr size_t SCRATCH_N =
+        static_cast<size_t>(Config::VISION_PROCESS_WIDTH) *
+        static_cast<size_t>(Config::VISION_PROCESS_HEIGHT);
+    std::memset(s_binary_mask, 0, SCRATCH_N);
     labels_present_bits_ = 0;
     for (uint8_t i = 0; i < Config::VISION_PROFILE_MAX; ++i) {
         label_pixel_counts_[i] = 0;
@@ -1253,6 +1289,12 @@ void VisionPipeline::update(
 ) {
     uint32_t start_us = Hal::hal_micros();
     last_process_time_ms_ = now_ms;
+
+    // Defensive: buffers may be missing if init() ran under OOM conditions.
+    if (!ensure_vision_scratch()) {
+        setTelemetryEvent(TE_VISION_MASK_EMPTY);
+        return;
+    }
 
     // Prune stale tracks on a wall-clock basis, even when no frame is retrieved.
     pruneStaleTracks(now_ms);
