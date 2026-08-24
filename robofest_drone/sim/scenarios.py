@@ -131,6 +131,51 @@ SCENARIO_PRESETS: Dict[str, Dict[str, Any]] = {
         "human_behavior": "deviating_human",
         "peer_failure_enabled": False,
         "description": "Person-at-risk deviates off safe corridor, testing visual guidance corrections and dynamic re-routing."
+    },
+
+    # --- Phase 6 additions (items 11-15 integration coverage) ---
+
+    "night_low_light_map": {
+        "name": "night_low_light_map",
+        "mine_count": 40,
+        "on_ground_ratio": 0.75,
+        "buried_ratio": 0.25,
+        "obstacle_count": 2,
+        "false_positive_multiplier": 1.8,
+        "true_positive_multiplier": 0.6,
+        "drift_multiplier": 1.3,
+        "radio_loss_multiplier": 1.0,
+        "human_behavior": "slow_human",
+        "peer_failure_enabled": False,
+        "description": "Night/low-light proxy: depressed true-positive rate, elevated false positives and drift; exercises the firmware night-mode relaxation thresholds (item 15)."
+    },
+    "swarm_fusion_stress_map": {
+        "name": "swarm_fusion_stress_map",
+        "mine_count": 55,
+        "on_ground_ratio": 0.75,
+        "buried_ratio": 0.25,
+        "obstacle_count": 0,
+        "false_positive_multiplier": 2.2,
+        "true_positive_multiplier": 0.9,
+        "drift_multiplier": 1.6,
+        "radio_loss_multiplier": 2.5,
+        "human_behavior": "nervous_human",
+        "peer_failure_enabled": True,
+        "description": "Cross-drone fusion stress: noisy asymmetric detections plus a mid-flight peer loss, validating VISION_OBS distance-weighted fusion and consensus voting under degraded comms (items 11/12)."
+    },
+    "dynamic_obstacle_map": {
+        "name": "dynamic_obstacle_map",
+        "mine_count": 40,
+        "on_ground_ratio": 0.75,
+        "buried_ratio": 0.25,
+        "obstacle_count": 8,
+        "false_positive_multiplier": 1.0,
+        "true_positive_multiplier": 1.0,
+        "drift_multiplier": 1.1,
+        "radio_loss_multiplier": 1.0,
+        "human_behavior": "fast_human",
+        "peer_failure_enabled": False,
+        "description": "Dense obstacle field with a fast-moving person-at-risk: exercises vision-based TTC avoidance margins (item 14) and moving-target guidance."
     }
 }
 
