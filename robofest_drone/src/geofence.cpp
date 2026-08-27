@@ -119,14 +119,14 @@ void Geofence::updateEffectiveLimits(float drift_uncertainty_m) {
 
     // Prevent corridor collapse under high uncertainty by centering minimum box
     if ((effective_x_max_ - effective_x_min_) < Config::GEOFENCE_MIN_EFFECTIVE_WIDTH_M) {
-        float center_x = (Config::FIELD_X_MIN + Config::FIELD_X_MAX) * 0.5f;
+        float center_x = (base_x_min_ + base_x_max_) * 0.5f;
         effective_x_min_ = center_x - (Config::GEOFENCE_MIN_EFFECTIVE_WIDTH_M * 0.5f);
         effective_x_max_ = center_x + (Config::GEOFENCE_MIN_EFFECTIVE_WIDTH_M * 0.5f);
         setTelemetryEvent(TE_GEOFENCE_EFFECTIVE_LIMITS_TOO_SMALL);
     }
 
     if ((effective_y_max_ - effective_y_min_) < Config::GEOFENCE_MIN_EFFECTIVE_WIDTH_M) {
-        float center_y = (Config::FIELD_Y_MIN + Config::FIELD_Y_MAX) * 0.5f;
+        float center_y = (base_y_min_ + base_y_max_) * 0.5f;
         effective_y_min_ = center_y - (Config::GEOFENCE_MIN_EFFECTIVE_WIDTH_M * 0.5f);
         effective_y_max_ = center_y + (Config::GEOFENCE_MIN_EFFECTIVE_WIDTH_M * 0.5f);
         setTelemetryEvent(TE_GEOFENCE_EFFECTIVE_LIMITS_TOO_SMALL);
@@ -181,11 +181,7 @@ Types::GeofenceStatus Geofence::evaluateRawStatus(const Types::Pose2D& pose) con
 
 void Geofence::computeCorrectionVector(const Types::Pose2D& pose) {
     if (std::isnan(pose.field_x) || std::isnan(pose.field_y)) {
-        float center_x = (Config::FIELD_X_MIN + Config::FIELD_X_MAX) * 0.5f;
-        float center_y = (Config::FIELD_Y_MIN + Config::FIELD_Y_MAX) * 0.5f;
         correction_vector_ = Types::Vec2(0.0f, 0.0f);
-        (void)center_x;
-        (void)center_y;
         return;
     }
 
@@ -312,9 +308,15 @@ Types::Vec2 Geofence::applyBoundaryAwareVelocityBias(
             break;
 
         case Types::GeofenceStatus::GEOFENCE_WARNING:
-            // Moderate speed reduction + add boundary correction vector
-            vx = (vx * Config::GEOFENCE_SPEED_REDUCTION_FACTOR_WARNING) + correction_vector_.x;
-            vy = (vy * Config::GEOFENCE_SPEED_REDUCTION_FACTOR_WARNING) + correction_vector_.y;
+            // Moderate speed reduction only for outward velocity components + add boundary correction vector
+            if (vx * correction_vector_.x < 0.0f) {
+                vx *= Config::GEOFENCE_SPEED_REDUCTION_FACTOR_WARNING;
+            }
+            if (vy * correction_vector_.y < 0.0f) {
+                vy *= Config::GEOFENCE_SPEED_REDUCTION_FACTOR_WARNING;
+            }
+            vx += correction_vector_.x;
+            vy += correction_vector_.y;
             break;
 
         case Types::GeofenceStatus::GEOFENCE_NEAR_LIMIT:
@@ -332,8 +334,15 @@ Types::Vec2 Geofence::applyBoundaryAwareVelocityBias(
                 vy = 0.0f;
             }
 
-            vx = (vx * Config::GEOFENCE_SPEED_REDUCTION_FACTOR_NEAR_LIMIT) + correction_vector_.x;
-            vy = (vy * Config::GEOFENCE_SPEED_REDUCTION_FACTOR_NEAR_LIMIT) + correction_vector_.y;
+            // Severe speed reduction only for outward velocity components
+            if (vx * correction_vector_.x < 0.0f) {
+                vx *= Config::GEOFENCE_SPEED_REDUCTION_FACTOR_NEAR_LIMIT;
+            }
+            if (vy * correction_vector_.y < 0.0f) {
+                vy *= Config::GEOFENCE_SPEED_REDUCTION_FACTOR_NEAR_LIMIT;
+            }
+            vx += correction_vector_.x;
+            vy += correction_vector_.y;
             break;
 
         case Types::GeofenceStatus::GEOFENCE_OUTSIDE:
