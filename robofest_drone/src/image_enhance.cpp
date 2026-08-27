@@ -310,22 +310,40 @@ void enhance_shadow_mask(const uint8_t* rgb888, uint16_t w, uint16_t h,
     // Separable box blur into 'blur' (sum form).
     for (uint16_t y = 0; y < h; ++y) {
         uint32_t acc = 0;
+        for (int i = 0; i <= R && i < w; ++i) {
+            acc += lum[y * w + i];
+        }
         for (uint16_t x = 0; x < w; ++x) {
-            acc += lum[y * w + x];
-            if (x >= 2 * R + 1) acc -= lum[y * w + (x - (2 * R + 1))];
-            blur[y * w + x] = static_cast<uint16_t>(
-                acc / std::min<uint32_t>(2u * R + 1u, x + 1u));
+            const int left = std::max(0, static_cast<int>(x) - R);
+            const int right = std::min(static_cast<int>(w) - 1, static_cast<int>(x) + R);
+            blur[y * w + x] = static_cast<uint16_t>(acc / (right - left + 1));
+            
+            if (static_cast<int>(x) - R >= 0) {
+                acc -= lum[y * w + (x - R)];
+            }
+            if (static_cast<int>(x) + R + 1 < w) {
+                acc += lum[y * w + (x + R + 1)];
+            }
         }
     }
     // Vertical pass writes into the second PSRAM plane (cannot reuse blur
     // in place: column windows read rows written earlier in this pass).
     for (uint16_t x = 0; x < w; ++x) {
         uint32_t acc = 0;
+        for (int i = 0; i <= R && i < h; ++i) {
+            acc += blur[i * w + x];
+        }
         for (uint16_t y = 0; y < h; ++y) {
-            acc += blur[y * w + x];
-            if (y >= 2 * R + 1) acc -= blur[(y - (2 * R + 1)) * w + x];
-            vert[y * w + x] = static_cast<uint16_t>(
-                acc / std::min<uint32_t>(2u * R + 1u, y + 1u));
+            const int top = std::max(0, static_cast<int>(y) - R);
+            const int bot = std::min(static_cast<int>(h) - 1, static_cast<int>(y) + R);
+            vert[y * w + x] = static_cast<uint16_t>(acc / (bot - top + 1));
+            
+            if (static_cast<int>(y) - R >= 0) {
+                acc -= blur[(y - R) * w + x];
+            }
+            if (static_cast<int>(y) + R + 1 < h) {
+                acc += blur[(y + R + 1) * w + x];
+            }
         }
     }
 

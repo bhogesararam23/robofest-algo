@@ -8,17 +8,6 @@ namespace {
 
 constexpr float M_PI_F = 3.14159265358979323846f;
 
-// 8-neighborhood in clockwise order starting East.
-constexpr int8_t kNdx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
-constexpr int8_t kNdy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
-
-inline bool fg(const uint8_t* mask, uint16_t w, uint16_t h, int x, int y) {
-    if (x < 0 || y < 0 || x >= static_cast<int>(w) || y >= static_cast<int>(h)) {
-        return false;
-    }
-    return mask[static_cast<uint32_t>(y) * w + x] != 0;
-}
-
 } // namespace
 
 const char* vision_shape_class_name(ShapeClass cls) {
@@ -35,137 +24,7 @@ const char* vision_shape_class_name(ShapeClass cls) {
 }
 
 // ============================================================================
-// MOORE-NEIGHBOR CONTOUR TRACE
-// ============================================================================
-
-uint16_t vision_trace_contour(
-    const uint8_t* mask, uint16_t w, uint16_t h,
-    uint16_t seed_x, uint16_t seed_y,
-    VisionPoint* out_pts, uint16_t cap) {
-
-    if (mask == nullptr || out_pts == nullptr || cap < 4) return 0;
-    if (!fg(mask, w, h, seed_x, seed_y)) return 0;
-
-    // Find the start backtrack direction (West of seed), per Moore tracing.
-    int bx = static_cast<int>(seed_x) - 1;
-    int by = static_cast<int>(seed_y);
-    int dir = 6; // search begins from the neighbor after the backtrack slot
-
-    // Single-pixel / line degenerate handling: the loop below with Jacob's
-    // criterion covers these; budget still bounds runtime.
-    constexpr uint16_t kMaxSteps = 4096;
-
-    uint16_t n = 0;
-    int cx = seed_x;
-    int cy = seed_y;
-
-    for (uint16_t step = 0; step < kMaxSteps; ++step) {
-        bool found = false;
-        for (int k = 0; k < 8; ++k) {
-            const int probe = (dir + k) & 7;
-            const int nx = cx + kNdx[probe];
-            const int ny = cy + kNdy[probe];
-            if (fg(mask, w, h, nx, ny)) {
-                // Record boundary point on direction change into foreground.
-                if (n == 0 ||
-                    out_pts[n - 1].x != static_cast<float>(cx) ||
-                    out_pts[n - 1].y != static_cast<float>(cy)) {
-                    if (n >= cap) break;
-                    out_pts[n].x = static_cast<float>(cx);
-                    out_pts[n].y = static_cast<float>(cy);
-                    n++;
-                }
-                bx = cx - kNdx[(probe + 7) & 7] ; // backtrack neighbor
-                by = cy - kNdy[(probe + 7) & 7];
-                cx = nx;
-                cy = ny;
-                // Next search starts rotated relative to entry edge.
-                dir = (probe + 6) & 7;
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            // Isolated pixel blob.
-            if (n == 0) {
-                out_pts[0].x = static_cast<float>(seed_x);
-                out_pts[0].y = static_cast<float>(seed_y);
-                n = 1;
-            }
-            break;
-        }
-
-        // Jacob's stopping criterion: re-entered the seed moving in the same
-        // direction as the initial step.
-        if (cx == seed_x && cy == seed_y && bx == seed_x - 1 && by == seed_y && n >= 4) {
-            break;
-        }
-        if (n >= cap) break;
-    }
-
-    if (n > 2 &&
-        out_pts[0].x == out_pts[n - 1].x &&
-        out_pts[0].y == out_pts[n - 1].y) {
-        n--; // drop duplicated closing vertex; caller treats contour as closed
-    }
-    return n;
-}
-
-// ============================================================================
-// CONVEXITY DEFECTS
-// ============================================================================
-
-void vision_convexity_defects(
-    const VisionPoint* contour, uint16_t contour_n,
-    const VisionPoint* hull, uint8_t hull_n,
-    float min_depth_px,
-    uint8_t& out_defect_count,
-    float& out_max_depth) {
-
-    out_defect_count = 0;
-    out_max_depth = 0.0f;
-
-    if (contour == nullptr || hull == nullptr || contour_n < 4 || hull_n < 3) {
-        return;
-    }
-
-    // For each contour vertex compute signed distance to every hull edge and
-    // keep the maximum positive inward depth. O(n*h) is bounded: contour <=384
-    // points, hull <=~24 vertices for marker-scale shapes.
-    bool prev_defect = false;
-    for (uint16_t i = 0; i < contour_n; ++i) {
-        float best_depth = 0.0f;
-        for (uint8_t e = 0; e < hull_n; ++e) {
-            const VisionPoint& a = hull[e];
-            const VisionPoint& b = hull[(e + 1) % hull_n];
-            const float ex = b.x - a.x;
-            const float ey = b.y - a.y;
-            const float len = std::sqrt(ex * ex + ey * ey);
-            if (len < 1e-6f) continue;
-            // Inward normal for clockwise-wound hulls (y-down image space):
-            // normal points right of travel direction.
-            const float nx_ = ey / len;
-            const float ny_ = -ex / len;
-            const float dx = contour[i].x - a.x;
-            const float dy = contour[i].y - a.y;
-            const float d = dx * nx_ + dy * ny_;
-            if (d > best_depth) best_depth = d;
-        }
-
-        if (best_depth > out_max_depth) out_max_depth = best_depth;
-
-        const bool is_defect = best_depth >= min_depth_px;
-        // Count rising edges only so one wide concavity = one defect.
-        if (is_defect && !prev_defect) {
-            if (out_defect_count < 255) out_defect_count++;
-        }
-        prev_defect = is_defect;
-    }
-}
-
-// ============================================================================
-// DECISION TREE CLASSIFIER
+// LABEL-MASK CONTOUR API (consumed by VisionPipeline::extractBlobs)
 // ============================================================================
 
 ShapeClass vision_classify_shape(
@@ -194,18 +53,20 @@ ShapeClass vision_classify_shape(
         return ShapeClass::SHAPE_CIRCLE;
     }
 
-    // 4. Regular polygons by raw-corner count. DP on raw contours tends to
-    // under-count by one on rasterized corners, hence inclusive bands.
-    if (raw_corners >= 2 && raw_corners <= 3) {
+    // 4. Regular polygons by raw-corner count. Each band matches the true
+    // corner count exactly — no offset. If under-counting is observed in
+    // the field, tune the angle threshold in shape_corner_count() instead
+    // of shifting these bands.
+    if (raw_corners == 3) {
         return ShapeClass::SHAPE_TRIANGLE;
     }
-    if (raw_corners >= 4 && raw_corners <= 5) {
+    if (raw_corners == 4) {
         return ShapeClass::SHAPE_QUADRILATERAL;
     }
-    if (raw_corners == 6) {
+    if (raw_corners == 5) {
         return ShapeClass::SHAPE_PENTAGON;
     }
-    if (raw_corners >= 7 && defect_count < Config::SHAPE_STAR_MIN_DEFECTS) {
+    if (raw_corners >= 6 && defect_count < Config::SHAPE_STAR_MIN_DEFECTS) {
         return ShapeClass::SHAPE_HEXAGON_PLUS;
     }
 
@@ -275,8 +136,8 @@ uint16_t trace_core(
                     if (n >= cap) break;
                     record(cx, cy, n++);
                 }
-                bx = cx - dx8[(probe + 7) & 7];
-                by = cy - dy8[(probe + 7) & 7];
+                bx = nx - dx8[probe];
+                by = ny - dy8[probe];
                 cx = nx;
                 cy = ny;
                 dir = (probe + 6) & 7;
@@ -427,8 +288,8 @@ float shape_concavity_depth(
             const float len = std::sqrt(ex * ex + ey * ey);
             if (len < 1e-6f) continue;
             // Inward normal (clockwise hull, image coords y-down).
-            const float nx_ = ey / len;
-            const float ny_ = -ex / len;
+            const float nx_ = -ey / len;
+            const float ny_ = ex / len;
             const float d = (px - ax) * nx_ + (py - ay) * ny_;
             if (d > max_depth) max_depth = d;
         }

@@ -56,25 +56,10 @@ _assert_hue_buckets_contiguous()
 
 
 # ============================================================================
-# STEP 2: CLASSIFIER. Hue-less colors first; then the hue table.
-# ============================================================================
-
-def classify_color(mean_h, mean_s, mean_v):
-    if mean_v <= 50:
-        return "black"
-    if mean_s <= 40 and mean_v >= 200:
-        return "white"
-    if mean_s <= 40:
-        return "gray"
-    for name, lo, hi in HUE_BUCKETS:
-        if lo <= mean_h <= hi:
-            return name
-    return "unknown"
-
-
-# ============================================================================
-# STEP 3: ONE MASK PER COLOR BUCKET so contours from different colors never
-# merge. Boundaries mirror HUE_BUCKETS exactly.
+# STEP 2: ONE MASK PER COLOR BUCKET so contours from different colors never
+# merge. Boundaries mirror HUE_BUCKETS exactly. All color classification goes
+# through COLOR_BANDS — no standalone classify_color() function, because
+# hardcoding separate thresholds inevitably drifts out of sync.
 # ============================================================================
 
 COLOR_BANDS = {

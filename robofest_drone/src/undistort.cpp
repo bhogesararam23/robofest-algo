@@ -94,8 +94,15 @@ bool undistort_build_map(uint16_t w, uint16_t h) {
             const float vn =
                 (static_cast<float>(y) - Config::CAM_CY_PX) / Config::CAM_FY_PX;
 
-            float su, sv;
-            invert_point(c, un, vn, su, sv);
+            float su = un, sv = vn;
+            if (c.valid) {
+                const float r2 = un * un + vn * vn;
+                const float radial = 1.0f + c.k1 * r2 + c.k2 * r2 * r2;
+                const float du = 2.0f * c.p1 * un * vn + c.p2 * (r2 + 2.0f * un * un);
+                const float dv = c.p1 * (r2 + 2.0f * vn * vn) + 2.0f * c.p2 * un * vn;
+                su = un * radial + du;
+                sv = vn * radial + dv;
+            }
 
             float px = su * Config::CAM_FX_PX + Config::CAM_CX_PX;
             float py = sv * Config::CAM_FY_PX + Config::CAM_CY_PX;

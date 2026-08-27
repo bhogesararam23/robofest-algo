@@ -25,33 +25,6 @@ namespace RobofestDrone {
 const char* vision_shape_class_name(ShapeClass cls);
 
 // ----------------------------------------------------------------------------
-// Ordered Moore-neighbor boundary trace on a binary mask (0 = background,
-// nonzero = foreground, 4-connectivity semantics preserved by 8-neighborhood
-// search). Starts at (seed_x, seed_y) which MUST be a foreground pixel.
-// Traces clockwise. Terminates via Jacob's criterion plus a hard step budget
-// so degenerate masks can never spin the loop. Returns point count written
-// to out_pts (<= cap), or 0 on failure.
-// ----------------------------------------------------------------------------
-uint16_t vision_trace_contour(
-    const uint8_t* mask, uint16_t w, uint16_t h,
-    uint16_t seed_x, uint16_t seed_y,
-    VisionPoint* out_pts, uint16_t cap);
-
-// ----------------------------------------------------------------------------
-// Convexity defect statistics for an ordered closed contour against its own
-// convex hull. For each contour vertex the perpendicular depth inside the
-// nearest hull edge is evaluated; defects are counted where depth exceeds
-// min_depth_px and the sign indicates a true concavity. Outputs the count
-// and the maximum observed depth.
-// ----------------------------------------------------------------------------
-void vision_convexity_defects(
-    const VisionPoint* contour, uint16_t contour_n,
-    const VisionPoint* hull, uint8_t hull_n,
-    float min_depth_px,
-    uint8_t& out_defect_count,
-    float& out_max_depth);
-
-// ----------------------------------------------------------------------------
 // Decision tree classifier. Inputs are scale-free descriptor values; the
 // thresholds live in config/thresholds.h so field tuning never touches code.
 // ----------------------------------------------------------------------------

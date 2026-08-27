@@ -32,6 +32,14 @@ struct SystemState {
     bool human_detected = false;
     bool human_off_path = false;
     bool human_in_exit_zone = false;
+
+    // Moving target landing tracking fields
+    bool target_tracked = false;
+    float target_field_x = 0.0f;
+    float target_field_y = 0.0f;
+    float target_velocity_x = 0.0f;
+    float target_velocity_y = 0.0f;
+
     Types::Vec2 search_velocity;
     bool search_coverage_sufficient = false;
     bool search_needs_more_scan = true;

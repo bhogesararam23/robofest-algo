@@ -1,5 +1,6 @@
 #include "test_framework.h"
 #include "../src/vision_pipeline.h"
+#include "../src/shape_analysis.h"
 
 using namespace RobofestDrone;
 
@@ -314,4 +315,42 @@ TEST(VisionPipelineAccessTest, FocusModeEnablesOnlySelectedProfile) {
         if (pipe.getProfileByIndex(i)->enabled) enabled++;
     }
     ASSERT_EQ(enabled, pipe.getProfileCount());
+}
+
+// ============================================================================
+// SHAPE CLASSIFICATION BANDS (Issue 2 fix: off-by-one corrected)
+// ============================================================================
+
+TEST(ShapeClassificationTest, BandsMatchTrueCornerCounts) {
+    // Each corner count must map to the shape matching its actual name.
+    // Previous code had bands shifted by one (5 corners => QUAD, 6 => PENTAGON).
+    ASSERT_EQ(vision_classify_shape(0.9f, 0.95f, 0.85f, 1.0f, 3, 0),
+              ShapeClass::SHAPE_TRIANGLE);
+    ASSERT_EQ(vision_classify_shape(0.85f, 0.95f, 0.80f, 1.1f, 4, 0),
+              ShapeClass::SHAPE_QUADRILATERAL);
+    ASSERT_EQ(vision_classify_shape(0.82f, 0.93f, 0.78f, 1.0f, 5, 0),
+              ShapeClass::SHAPE_PENTAGON);
+    ASSERT_EQ(vision_classify_shape(0.80f, 0.92f, 0.75f, 1.0f, 6, 0),
+              ShapeClass::SHAPE_HEXAGON_PLUS);
+    ASSERT_EQ(vision_classify_shape(0.78f, 0.90f, 0.72f, 1.0f, 7, 0),
+              ShapeClass::SHAPE_HEXAGON_PLUS);
+    ASSERT_EQ(vision_classify_shape(0.76f, 0.88f, 0.70f, 1.0f, 8, 0),
+              ShapeClass::SHAPE_HEXAGON_PLUS);
+}
+
+TEST(ShapeClassificationTest, CircleStillDetected) {
+    // High circularity + high solidity => circle, regardless of corner count.
+    ASSERT_EQ(vision_classify_shape(0.95f, 0.95f, 0.90f, 1.05f, 12, 0),
+              ShapeClass::SHAPE_CIRCLE);
+}
+
+TEST(ShapeClassificationTest, StarDetectedByDefectsAndLowSolidity) {
+    // Many defects + low solidity => star/concave.
+    ASSERT_EQ(vision_classify_shape(0.60f, 0.50f, 0.65f, 1.0f, 8, 5),
+              ShapeClass::SHAPE_STAR_CONCAVE);
+}
+
+TEST(ShapeClassificationTest, BarDetectedByHighAspect) {
+    ASSERT_EQ(vision_classify_shape(0.70f, 0.90f, 0.60f, 5.0f, 4, 0),
+              ShapeClass::SHAPE_BAR);
 }

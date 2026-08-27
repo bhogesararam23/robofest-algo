@@ -775,9 +775,10 @@ void VisionPipeline::applyMorphologyCleanup() {
     const uint16_t W = Config::VISION_PROCESS_WIDTH;
     const uint16_t H = Config::VISION_PROCESS_HEIGHT;
     const uint8_t R = std::min<uint8_t>(Config::VISION_MORPHOLOGY_RADIUS, 4);
-    constexpr uint8_t SRC = 0; // s_morph_temp slot
-    (void)SRC;
 
+    // Save original labeled mask to snapshot, then clear the combined
+    // result buffer ONCE. s_binary_mask is the final output and is only
+    // added to during the loop — never reset or overwritten wholesale.
     std::memcpy(s_label_snapshot, s_binary_mask, static_cast<size_t>(W) * H);
     std::memset(s_binary_mask, 0, static_cast<size_t>(W) * H);
 
@@ -787,7 +788,7 @@ void VisionPipeline::applyMorphologyCleanup() {
 
         const uint8_t label = static_cast<uint8_t>(pi + 1);
 
-        // Build binary view of this label
+        // Build binary view of this label from the original snapshot.
         for (uint32_t idx = 0; idx < static_cast<uint32_t>(W) * H; ++idx) {
             s_morph_temp[idx] = (s_label_snapshot[idx] == label) ? 1 : 0;
         }
@@ -798,6 +799,8 @@ void VisionPipeline::applyMorphologyCleanup() {
         // Binary data => window min == "window sum equals window size".
         // Complexity drops from O(W*H*(2R+1)^2) to O(W*H*2*(2R+1)).
         // Out-of-bounds counts as background (matches previous semantics).
+        // Writes result to s_morph_temp (NOT s_binary_mask) so the
+        // combined result buffer is untouched during per-label cleanup.
         // ------------------------------------------------------------
         {
             // Horizontal pass: s_morph_temp -> s_sep_tmp
@@ -815,7 +818,7 @@ void VisionPipeline::applyMorphologyCleanup() {
                     row_out[x] = (sum == static_cast<uint32_t>(span)) ? 1u : 0u;
                 }
             }
-            // Vertical pass: s_sep_tmp -> s_binary_mask
+            // Vertical pass: s_sep_tmp -> s_morph_temp (eroded result)
             for (uint16_t x = 0; x < W; ++x) {
                 for (uint16_t y = 0; y < H; ++y) {
                     int lo = static_cast<int>(y) - R;
@@ -827,7 +830,7 @@ void VisionPipeline::applyMorphologyCleanup() {
                     for (int k = lo; k <= hi; ++k) {
                         sum += s_sep_tmp[static_cast<size_t>(k) * W + x];
                     }
-                    s_binary_mask[static_cast<size_t>(y) * W + x] =
+                    s_morph_temp[static_cast<size_t>(y) * W + x] =
                         (sum == static_cast<uint32_t>(span)) ? 1u : 0u;
                 }
             }
@@ -836,9 +839,11 @@ void VisionPipeline::applyMorphologyCleanup() {
         // ------------------------------------------------------------
         // SEPARABLE DILATION: same two-pass structure, max semantics
         // ("any set within radius"). Out-of-bounds stays background.
+        // Starts from the eroded result in s_morph_temp, writes the
+        // dilated result back to s_morph_temp. s_binary_mask is not
+        // touched during this step.
         // ------------------------------------------------------------
         {
-            std::memcpy(s_morph_temp, s_binary_mask, static_cast<size_t>(W) * H);
             // Horizontal pass: s_morph_temp -> s_sep_tmp
             for (uint16_t y = 0; y < H; ++y) {
                 const uint8_t* row_in = s_morph_temp + static_cast<size_t>(y) * W;
@@ -855,7 +860,7 @@ void VisionPipeline::applyMorphologyCleanup() {
                     row_out[x] = any_set ? 1u : 0u;
                 }
             }
-            // Vertical pass: s_sep_tmp -> s_binary_mask
+            // Vertical pass: s_sep_tmp -> s_morph_temp (dilated result)
             for (uint16_t x = 0; x < W; ++x) {
                 for (uint16_t y = 0; y < H; ++y) {
                     int lo = static_cast<int>(y) - R;
@@ -866,14 +871,15 @@ void VisionPipeline::applyMorphologyCleanup() {
                     for (int k = lo; k <= hi && !any_set; ++k) {
                         any_set |= s_sep_tmp[static_cast<size_t>(k) * W + x];
                     }
-                    s_binary_mask[static_cast<size_t>(y) * W + x] = any_set ? 1u : 0u;
+                    s_morph_temp[static_cast<size_t>(y) * W + x] = any_set ? 1u : 0u;
                 }
             }
         }
 
-        // Write back with OR so previously processed labels are preserved.
+        // Merge cleaned mask into combined result: only claim background
+        // pixels so previously processed labels are never overwritten.
         for (uint32_t idx = 0; idx < static_cast<uint32_t>(W) * H; ++idx) {
-            if (s_binary_mask[idx] == 1) {
+            if (s_morph_temp[idx] == 1 && s_binary_mask[idx] == 0) {
                 s_binary_mask[idx] = label;
             }
         }

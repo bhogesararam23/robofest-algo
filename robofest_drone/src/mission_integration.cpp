@@ -427,6 +427,16 @@ void MissionIntegration::updateHumanTracker(uint32_t now_ms) {
     ctx_->system_state.human_detected = ctx_->latest_human_track.human_detected;
     ctx_->system_state.human_off_path = ctx_->latest_human_track.human_off_path;
     ctx_->system_state.human_in_exit_zone = ctx_->latest_human_track.human_in_exit_zone;
+
+    if (ctx_->system_state.human_detected) {
+        ctx_->system_state.target_tracked = true;
+        ctx_->system_state.target_field_x = ctx_->latest_human_track.field_x;
+        ctx_->system_state.target_field_y = ctx_->latest_human_track.field_y;
+        ctx_->system_state.target_velocity_x = ctx_->latest_human_track.velocity_x;
+        ctx_->system_state.target_velocity_y = ctx_->latest_human_track.velocity_y;
+    } else {
+        ctx_->system_state.target_tracked = false;
+    }
 }
 
 void MissionIntegration::updateSearchBehavior(uint32_t now_ms) {
@@ -627,7 +637,44 @@ void MissionIntegration::updateFlightCommands(uint32_t now_ms) {
             break;
 
         case Types::DroneState::LANDING:
-            ctx_->fc_bridge->sendLand(now_ms);
+            if (ctx_->system_state.target_tracked) {
+                // Position-Based Visual Servoing (PBVS) using field coordinates
+                float err_x = ctx_->system_state.target_field_x - ctx_->system_state.pose.field_x;
+                float err_y = ctx_->system_state.target_field_y - ctx_->system_state.pose.field_y;
+                float target_speed = std::sqrt(ctx_->system_state.target_velocity_x * ctx_->system_state.target_velocity_x + 
+                                               ctx_->system_state.target_velocity_y * ctx_->system_state.target_velocity_y);
+                
+                // Servoing gain (P-controller)
+                const float kp = 0.5f; 
+                float vx = err_x * kp;
+                float vy = err_y * kp;
+
+                // Cap lateral velocities
+                const float cap = 0.5f;
+                float mag = std::sqrt(vx * vx + vy * vy);
+                if (mag > cap) {
+                    vx *= (cap / mag);
+                    vy *= (cap / mag);
+                }
+
+                // Dynamic descent rate calculation (shallow approach for fast targets)
+                float base_descent = Config::LANDING_ALTITUDE_STEP_M;
+                float closure = std::min(1.5f, std::max(0.3f, ctx_->system_state.altitude_m / 2.0f));
+                float speed_penalty = 1.0f / (1.0f + target_speed);
+                float descent_rate = base_descent * closure * speed_penalty;
+                
+                // Set altitude target slightly below current to force descent at the calculated rate
+                float target_altitude_m = std::max(0.0f, ctx_->system_state.altitude_m - descent_rate);
+
+                // If we are very close to the ground, fallback to raw sendLand
+                if (ctx_->system_state.altitude_m <= 0.3f) {
+                    ctx_->fc_bridge->sendLand(now_ms);
+                } else {
+                    ctx_->fc_bridge->sendVelocityCommand(Types::Vec2(vx, vy), target_altitude_m, ctx_->system_state.pose.yaw_deg, now_ms);
+                }
+            } else {
+                ctx_->fc_bridge->sendLand(now_ms);
+            }
             break;
 
         case Types::DroneState::DISARMED:
