@@ -1,7 +1,12 @@
 vision_pipeline:
   ros__parameters:
-    lower_hsv: [20, 80, 80]
-    upper_hsv: [40, 255, 255]
-    min_area_px: 50.0
-    min_circularity: 0.35
-    focal_length_px: 420.0
+    # Each group is h_min, s_min, v_min, h_max, s_max, v_max.
+    mine_hsv_ranges: [0, 100, 100, 10, 255, 255, 170, 100, 100, 180, 255, 255, 20, 80, 80, 40, 255, 255]
+    min_mine_area_px: 50.0
+    max_mine_area_px: 2500.0
+    min_object_area_px: 120.0
+    min_mine_circularity: 0.35
+    object_contrast_threshold: 18.0
+    background_border_px: 8
+    h_fov_deg: 62.0
+    v_fov_deg: 48.0
