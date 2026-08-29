@@ -416,7 +416,13 @@ void MineMap::checkConfirmation(Types::MineRecord& mine) {
             mine.status = Types::MineStatus::CONFIRMED;
             map_version_++;
             mine.map_version = map_version_;
-            setTelemetryEvent(TE_MINE_CONFIRMED);
+            if (mine.marker_type == Types::VisionMarkerType::MARKER_OBSTACLE) {
+                mine.coverage_status = Types::CoverageStatus::OBSTACLE_CONFIRMED;
+                setTelemetryEvent(TE_OBSTACLE_CONFIRMED);
+            } else {
+                mine.coverage_status = Types::CoverageStatus::MINE_CONFIRMED;
+                setTelemetryEvent(TE_MINE_CONFIRMED);
+            }
         }
     }
 }

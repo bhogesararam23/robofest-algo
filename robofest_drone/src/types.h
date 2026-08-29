@@ -156,7 +156,8 @@ enum class VisionMarkerType : uint8_t {
     MARKER_PURPLE = 7,
     MARKER_PINK = 8,
     MARKER_WHITE = 9,
-    MARKER_BLACK = 10
+    MARKER_BLACK = 10,
+    MARKER_OBSTACLE = 11   // generic real object, unclassified
 };
 
 // ============================================================================
@@ -311,6 +312,7 @@ struct MineRecord {
 
     uint16_t rejection_reason = 0;
     uint16_t update_count = 0;
+    CoverageStatus coverage_status = CoverageStatus::UNSCANNED;
 
     // Fusion/consensus bookkeeping (items 11/12):
     VisionMarkerType obs_types[MINE_OBS_HISTORY] = {};

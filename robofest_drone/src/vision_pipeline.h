@@ -73,6 +73,7 @@ struct VisionBlob {
     float extent = 1.0f;       // area / bbox area
     float solidity = 1.0f;     // area / convex hull area
     uint8_t corner_count = 0;  // DP vertices on hull polyline (0 = not computed)
+    uint8_t avg_hue = 0;       // mean hue of boundary pixels (0-180)
     Types::VisionMarkerType profile_type = Types::VisionMarkerType::UNKNOWN;
     bool valid = false;
     // Phase 3 additions (items 7/8):

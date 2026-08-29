@@ -2,6 +2,7 @@
 #include "../src/vision_pipeline.h"
 #include "../src/profiler.h"
 #include "../hal/hal_camera.h"
+#include "../hal/hal_system.h"
 #include <cstring>
 #include <vector>
 

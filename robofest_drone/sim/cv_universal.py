@@ -76,6 +76,11 @@ COLOR_BANDS = {
     "gray":    [(0, 180, 0, 40, 51, 199)],
 }
 
+# Generic obstacle mask: any hue with S/V above ground threshold.
+# Subtracted by named color masks before contour analysis so pixels
+# already claimed by a specific color don't produce duplicate blobs.
+OBSTACLE_BAND = [(0, 180, 40, 255, 40, 255)]
+
 
 def build_mask(hsv, bands):
     mask = np.zeros(hsv.shape[:2], dtype=np.uint8)
@@ -184,13 +189,17 @@ SHAPE_ORDER = ["triangle", "square", "rectangle", "pentagon",
                "hexagon", "heptagon", "octagon", "circle", "star"]
 
 
-def draw_label(overlay, d, label, color_name):
-    bgr = DRAW_BGR.get(color_name, (255, 255, 255))
+def draw_label(overlay, d, label, color_name, is_mine=False):
+    if color_name == "obstacle":
+        bgr = (128, 128, 128)
+    else:
+        bgr = DRAW_BGR.get(color_name, (255, 255, 255))
     outline = (255, 255, 255) if color_name in ("black",) else (0, 0, 0)
     p1 = (d["x"], d["y"])
     p2 = (d["x"] + d["w"], d["y"] + d["h"])
     pos = (d["x"], max(15, d["y"] - 8))
-    cv2.rectangle(overlay, p1, p2, bgr, 2)
+    thickness = 3 if is_mine else 1
+    cv2.rectangle(overlay, p1, p2, bgr, thickness)
     cv2.putText(overlay, label, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                 outline, 2, cv2.LINE_AA)
     cv2.putText(overlay, label, pos, cv2.FONT_HERSHEY_SIMPLEX, 0.5,
@@ -246,15 +255,42 @@ def process_frame(img, min_area, max_area):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     overlay = img.copy()
     results = []
+
+    # 1. Build masks for all named colors
+    named_masks = {}
     for color_name, bands in COLOR_BANDS.items():
-        mask = build_mask(hsv, bands)
+        named_masks[color_name] = build_mask(hsv, bands)
+
+    # 2. Build generic obstacle mask, then subtract all named color masks
+    obstacle_mask = build_mask(hsv, OBSTACLE_BAND)
+    for mask in named_masks.values():
+        obstacle_mask = cv2.bitwise_and(obstacle_mask, cv2.bitwise_not(mask))
+
+    # 3. Analyze named color masks — reclassify circular red/yellow as mines
+    for color_name, mask in named_masks.items():
         for d in analyze(mask, min_area, max_area):
             shape = classify_shape(d["corners"], d["aspect"], d["extent"],
                                    d["solidity"], d["circularity"])
             label = f"{color_name} {shape}"
-            draw_label(overlay, d, label, color_name)
+            is_mine = False
+
+            if color_name in ("red", "yellow") and shape == "circle":
+                label = f"mine ({color_name})"
+                is_mine = True
+
+            draw_label(overlay, d, label, color_name, is_mine=is_mine)
             results.append({**d, "color": color_name, "shape": shape,
                             "label": label})
+
+    # 4. Analyze generic obstacle mask
+    for d in analyze(obstacle_mask, min_area, max_area):
+        shape = classify_shape(d["corners"], d["aspect"], d["extent"],
+                               d["solidity"], d["circularity"])
+        label = "obstacle"
+        draw_label(overlay, d, label, "obstacle", is_mine=False)
+        results.append({**d, "color": "obstacle", "shape": shape,
+                        "label": label})
+
     return overlay, results
 
 
@@ -319,6 +355,13 @@ def run_camera(camera_source, min_area, max_area, width=640, height=480,
     if not cap.isOpened():
         raise SystemExit(f"Could not open camera source '{camera_source}'")
 
+    # Flicker-filter persistence tracks: each entry is
+    # [cx, cy, label, frames_seen, frames_missed]
+    tracks = []
+    MATCH_RADIUS_PX = 40
+    SEEDED_MIN = 3
+    MISSED_MAX = 2
+
     print("[CV_UNIVERSAL] Live camera mode - press Q or ESC to quit.")
     fps_avg = 0.0
     while True:
@@ -335,11 +378,48 @@ def run_camera(camera_source, min_area, max_area, width=640, height=480,
 
         overlay, results = process_frame(work, min_area, max_area)
 
+        # --- Flicker filter: match detections to persistent tracks ---
+        matched_det = set()
+        for tr in tracks:
+            best_j = -1
+            best_dist = MATCH_RADIUS_PX
+            for j, det in enumerate(results):
+                if j in matched_det:
+                    continue
+                dist = math.hypot(det["cx"] - tr[0], det["cy"] - tr[1])
+                if dist < best_dist:
+                    best_dist = dist
+                    best_j = j
+            if best_j >= 0:
+                tr[0] = results[best_j]["cx"]
+                tr[1] = results[best_j]["cy"]
+                tr[2] = results[best_j]["label"]
+                tr[3] += 1  # frames_seen
+                tr[4] = 0   # reset frames_missed
+                matched_det.add(best_j)
+            else:
+                tr[4] += 1  # frames_missed
+
+        # Start new tracks for unmatched detections
+        for j, det in enumerate(results):
+            if j not in matched_det:
+                tracks.append([det["cx"], det["cy"], det["label"], 1, 0])
+
+        # Prune dead tracks and draw only seeded ones
+        tracks = [tr for tr in tracks if tr[4] < MISSED_MAX]
+        for tr in tracks:
+            if tr[3] >= SEEDED_MIN:
+                pos = (tr[0] - 30, max(15, tr[1] - 10))
+                cv2.putText(overlay, tr[2], pos,
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            (0, 255, 255), 2, cv2.LINE_AA)
+
         dt_ms = (time.time() - t_start) * 1000.0
         fps_curr = 1000.0 / dt_ms if dt_ms > 0 else 0.0
         fps_avg = 0.9 * fps_avg + 0.1 * fps_curr if fps_avg > 0 else fps_curr
 
-        hud = f"objects: {len(results)} | norm {'ON' if normalize else 'OFF'} " \
+        hud = f"objects: {len(results)} | tracks: {len([t for t in tracks if t[3] >= SEEDED_MIN])}" \
+              f" | norm {'ON' if normalize else 'OFF'} " \
               f"(gain {gain:.2f}) | FPS {fps_avg:.1f}"
         cv2.putText(overlay, hud, (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                     (0, 255, 255), 2, cv2.LINE_AA)

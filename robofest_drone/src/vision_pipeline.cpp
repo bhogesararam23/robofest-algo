@@ -949,6 +949,8 @@ uint8_t VisionPipeline::extractBlobs() {
             uint32_t perimeter = 0;
             uint16_t bnd_count = 0;
             uint32_t bnd_total = 0;
+            uint32_t hue_sum = 0;
+            uint32_t hue_cnt = 0;
 
             while (q_head < q_tail && q_tail < W * H) {
                 uint16_t cx = s_bfs_x[q_head];
@@ -1002,6 +1004,29 @@ uint8_t VisionPipeline::extractBlobs() {
                         // Overwrite round-robin to keep spatial spread when overflowing
                         s_bnd_x[bnd_total % Config::VISION_BOUNDARY_POINTS_MAX] = cx;
                         s_bnd_y[bnd_total % Config::VISION_BOUNDARY_POINTS_MAX] = cy;
+                    }
+                    // Accumulate hue from boundary pixels for obstacle reclassification
+                    if (s_work_rgb != nullptr && hue_cnt < 256) {
+                        uint32_t px_idx = (static_cast<uint32_t>(cy) * W + cx) * 3;
+                        uint8_t r = s_work_rgb[px_idx];
+                        uint8_t g = s_work_rgb[px_idx + 1];
+                        uint8_t b = s_work_rgb[px_idx + 2];
+                        uint8_t c_max = std::max(r, std::max(g, b));
+                        uint8_t c_min = std::min(r, std::min(g, b));
+                        uint8_t delta = c_max - c_min;
+                        if (delta > 0) {
+                            int16_t h_calc = 0;
+                            if (c_max == r) {
+                                h_calc = 30 * (static_cast<int16_t>(g) - static_cast<int16_t>(b)) / delta;
+                            } else if (c_max == g) {
+                                h_calc = 60 + 30 * (static_cast<int16_t>(b) - static_cast<int16_t>(r)) / delta;
+                            } else {
+                                h_calc = 120 + 30 * (static_cast<int16_t>(r) - static_cast<int16_t>(g)) / delta;
+                            }
+                            if (h_calc < 0) h_calc += 180;
+                            hue_sum += static_cast<uint32_t>(h_calc);
+                            hue_cnt++;
+                        }
                     }
                 }
             }
@@ -1167,6 +1192,7 @@ uint8_t VisionPipeline::extractBlobs() {
             blob.extent = extent;
             blob.solidity = solidity;
             blob.corner_count = corners;
+            blob.avg_hue = (hue_cnt > 0) ? static_cast<uint8_t>(hue_sum / hue_cnt) : 0;
             blob.concavity_depth = concavity;
             blob.contour_corner_count = contour_corners;
             blob.shadow_ratio = shadow_ratio;
@@ -1297,6 +1323,36 @@ void VisionPipeline::updatePersistenceTracks(
     // 1. Fuse new blob detections into persistence tracks
     for (uint8_t b = 0; b < blob_count; ++b) {
         if (!blobs[b].valid) continue;
+
+        // --- Phase 3: Mine reclassification for generic obstacle blobs ---
+        // If the generic profile caught an object that is actually a round
+        // red or yellow item, reclassify it to the specific mine type before
+        // the persistence track logic runs. Uses existing profile bands
+        // (no duplicated constants) and SHAPE_GATES_CIRCLE thresholds.
+        if (const_cast<VisionBlob&>(blobs[b]).profile_type ==
+            Types::VisionMarkerType::MARKER_OBSTACLE) {
+            bool is_round = blobs[b].circularity >= 0.88f &&
+                            blobs[b].solidity >= 0.88f;
+            if (is_round) {
+                const VisionMarkerProfile* red_p = getProfileByType(Types::VisionMarkerType::ON_GROUND_MINE);
+                const VisionMarkerProfile* yel_p = getProfileByType(Types::VisionMarkerType::BURIED_SURFACE_MARKER);
+                if (red_p != nullptr &&
+                    vision_hsv_in_band(blobs[b].avg_hue, 128, 200,
+                                       red_p->h_min, red_p->h_max,
+                                       red_p->s_min, red_p->s_max,
+                                       red_p->v_min, red_p->v_max)) {
+                    const_cast<VisionBlob&>(blobs[b]).profile_type =
+                        Types::VisionMarkerType::ON_GROUND_MINE;
+                } else if (yel_p != nullptr &&
+                           vision_hsv_in_band(blobs[b].avg_hue, 128, 200,
+                                              yel_p->h_min, yel_p->h_max,
+                                              yel_p->s_min, yel_p->s_max,
+                                              yel_p->v_min, yel_p->v_max)) {
+                    const_cast<VisionBlob&>(blobs[b]).profile_type =
+                        Types::VisionMarkerType::BURIED_SURFACE_MARKER;
+                }
+            }
+        }
 
         const VisionMarkerProfile* profile = getProfileByType(blobs[b].profile_type);
         if (profile == nullptr || !profile->enabled) continue;

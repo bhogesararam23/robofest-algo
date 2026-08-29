@@ -171,6 +171,16 @@ static constexpr VisionProfileDef VISION_PROFILE_TABLE[] = {
      Config::CIRCULARITY_MIN, 0.0f,
      static_cast<uint16_t>(Config::MARKER_AREA_NOMINAL_PX),
      SHAPE_GATES_ANY},
+
+    // 11. OBSTACLE: generic real object, any hue, S/V floor to ignore bare ground.
+    // Placed LAST so first-match-wins gives red/yellow first claim on their pixels.
+    {11, true,
+     {0, 180, 40, 255, 40, 255}, false,
+     {0, 0, 0, 0, 0, 0},
+     Config::BLOB_AREA_MIN_PX, Config::BLOB_AREA_MAX_PX,
+     Config::CIRCULARITY_MIN, -5.0f,
+     static_cast<uint16_t>(Config::MARKER_AREA_NOMINAL_PX),
+     SHAPE_GATES_ANY},
 };
 #endif // !ROBOFEST_VISION_PROFILE_TABLE_DATA
 

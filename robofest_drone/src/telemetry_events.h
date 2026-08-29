@@ -149,6 +149,7 @@ constexpr uint16_t TE_MINE_CLAIM_RELEASED                    = 2311;
 constexpr uint16_t TE_MINE_CLAIM_EXPIRED                     = 2312;
 constexpr uint16_t TE_MINE_MAP_VERSION_CHANGED               = 2313;
 constexpr uint16_t TE_MINE_DECAY_RUN                         = 2314;
+constexpr uint16_t TE_OBSTACLE_CONFIRMED                     = 2315;
 
 
 // ============================================================================
