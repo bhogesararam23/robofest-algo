@@ -295,13 +295,13 @@ def open_video_capture(source):
     """Open any supported source with a Windows-friendly fallback chain."""
     cap = None
     if isinstance(source, int):
-        try:
-            cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
-            if not cap.isOpened() or not cap.read()[0]:
-                cap.release()
+        cap = cv2.VideoCapture(source)
+        if not cap.isOpened() or not cap.read()[0]:
+            cap.release()
+            try:
+                cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+            except Exception:
                 cap = cv2.VideoCapture(source)
-        except Exception:
-            cap = cv2.VideoCapture(source)
     else:
         cap = cv2.VideoCapture(source)  # file / rtsp / http-mjpeg
     return cap

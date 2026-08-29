@@ -153,8 +153,13 @@ TEST(cv_e2e, yellow_buried_marker_classified_separately) {
     Types::VisionCandidate best;
     for (uint32_t f = 0; f < 14 && !reported; ++f) {
         vp.update(pose, 2.0f, att, 50000 + f * Config::VISION_PERIOD_MS);
+        char buf[128];
+        sprintf(buf, "Frame %d, candidates %d", f, vp.getCandidateCount());
+        Hal::hal_log(buf);
         for (uint8_t i = 0; i < vp.getCandidateCount(); ++i) {
             const Types::VisionCandidate c = vp.getCandidate(i);
+            sprintf(buf, "  Cand %d: type=%d conf=%.1f", i, (int)c.marker_type, c.confidence);
+            Hal::hal_log(buf);
             if (c.marker_type == Types::VisionMarkerType::BURIED_SURFACE_MARKER) {
                 best = c;
                 reported = true;
@@ -206,7 +211,7 @@ TEST(cv_e2e, letterbox_adapter_maps_offcenter_truth) {
     // (2x downscale both axes, same aspect) still lands the marker where
     // the native-resolution case does.
     constexpr uint16_t SW = 160, SH = 120;
-    std::vector<uint8_t> frame(static_cast<size_t>(SW) * SH * 2, 0);
+    std::vector<uint8_t> frame(static_cast<size_t>(FW) * FH * 2, 0);
 
     Hal::hal_camera_init();
     Hal::hal_camera_clear_injection();

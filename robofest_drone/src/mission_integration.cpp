@@ -638,11 +638,25 @@ void MissionIntegration::updateFlightCommands(uint32_t now_ms) {
 
         case Types::DroneState::LANDING:
             if (ctx_->system_state.target_tracked) {
-                // Position-Based Visual Servoing (PBVS) using field coordinates
-                float err_x = ctx_->system_state.target_field_x - ctx_->system_state.pose.field_x;
-                float err_y = ctx_->system_state.target_field_y - ctx_->system_state.pose.field_y;
+                // Predictive Visual Servoing using field coordinates and target velocity
                 float target_speed = std::sqrt(ctx_->system_state.target_velocity_x * ctx_->system_state.target_velocity_x + 
                                                ctx_->system_state.target_velocity_y * ctx_->system_state.target_velocity_y);
+                
+                // Dynamic descent rate calculation (shallow approach for fast targets)
+                float base_descent = Config::LANDING_ALTITUDE_STEP_M;
+                float closure = std::min(1.5f, std::max(0.3f, ctx_->system_state.altitude_m / 2.0f));
+                float speed_penalty = 1.0f / (1.0f + target_speed);
+                float descent_rate = base_descent * closure * speed_penalty;
+
+                // Time To Impact (TTI)
+                float tti_s = ctx_->system_state.altitude_m / std::max(0.1f, descent_rate);
+
+                // Predictive intercept coordinates
+                float predict_x = ctx_->system_state.target_field_x + ctx_->system_state.target_velocity_x * std::min(2.0f, tti_s);
+                float predict_y = ctx_->system_state.target_field_y + ctx_->system_state.target_velocity_y * std::min(2.0f, tti_s);
+
+                float err_x = predict_x - ctx_->system_state.pose.field_x;
+                float err_y = predict_y - ctx_->system_state.pose.field_y;
                 
                 // Servoing gain (P-controller)
                 const float kp = 0.5f; 
@@ -656,12 +670,6 @@ void MissionIntegration::updateFlightCommands(uint32_t now_ms) {
                     vx *= (cap / mag);
                     vy *= (cap / mag);
                 }
-
-                // Dynamic descent rate calculation (shallow approach for fast targets)
-                float base_descent = Config::LANDING_ALTITUDE_STEP_M;
-                float closure = std::min(1.5f, std::max(0.3f, ctx_->system_state.altitude_m / 2.0f));
-                float speed_penalty = 1.0f / (1.0f + target_speed);
-                float descent_rate = base_descent * closure * speed_penalty;
                 
                 // Set altitude target slightly below current to force descent at the calculated rate
                 float target_altitude_m = std::max(0.0f, ctx_->system_state.altitude_m - descent_rate);

@@ -187,7 +187,14 @@ PALETTE = [
 
 class CvLaptopProtocol:
     def __init__(self, camera_index=0, width=640, height=480):
-        self.camera_index = camera_index
+        if str(camera_index).strip().isdigit() or (str(camera_index).strip().startswith("-") and str(camera_index).strip()[1:].isdigit()):
+            self.camera_index = int(camera_index)
+        else:
+            src_str = str(camera_index).strip()
+            if src_str.startswith("http://") or src_str.startswith("https://"):
+                if src_str.count("/") <= 2 or src_str.endswith(":4747"):
+                    src_str = src_str.rstrip("/") + "/video"
+            self.camera_index = src_str
         self.width = width
         self.height = height
 
@@ -520,19 +527,23 @@ class CvLaptopProtocol:
         print("=" * 64)
         print("  ROBOFEST GUJARAT 6.0 - LAPTOP CV PROTOCOL (MULTI-COLOR/SHAPE)")
         print("=" * 64)
-        print(f"[CV_PROTOCOL] Opening camera index {self.camera_index}...")
+        print(f"[CV_PROTOCOL] Opening camera source: {self.camera_index}...")
 
-        cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW) \
-            if sys.platform.startswith("win") else cv2.VideoCapture(self.camera_index)
+        if isinstance(self.camera_index, int):
+            cap = cv2.VideoCapture(self.camera_index)
+            if not cap.isOpened() or not cap.read()[0]:
+                print("[CV_PROTOCOL][WARN] Camera index 0 failed, trying fallback index 1...")
+                cap = cv2.VideoCapture(1)
+        else:
+            cap = cv2.VideoCapture(self.camera_index)
+
         if not cap.isOpened():
-            print("[CV_PROTOCOL][WARN] Camera index failed, trying fallback index 1...")
-            cap = cv2.VideoCapture(1)
-            if not cap.isOpened():
-                print("[CV_PROTOCOL][CRITICAL] No available webcam found!")
-                return False
+            print(f"[CV_PROTOCOL][CRITICAL] Could not open video source '{self.camera_index}'!")
+            return False
 
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        if isinstance(self.camera_index, int):
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
         self.setup_trackbars()
         cv2.namedWindow(self.window_main, cv2.WINDOW_NORMAL)
@@ -724,7 +735,8 @@ class CvLaptopProtocol:
 def main():
     global CONFIG_FILENAME
     parser = argparse.ArgumentParser(description="Robofest laptop CV calibration protocol")
-    parser.add_argument("--camera", type=int, default=0)
+    parser.add_argument("--camera", default="0",
+                        help="Camera device index (e.g. 0, 1, 2) or DroidCam IP stream URL (e.g. http://192.168.1.5:4747/video)")
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--export-only", metavar="JSON_PATH", default=None,

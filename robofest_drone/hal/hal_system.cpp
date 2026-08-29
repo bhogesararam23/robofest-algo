@@ -34,12 +34,14 @@ uint32_t hal_micros() {
 void hal_log(const char* message) {
     if (message != nullptr) {
         std::printf("%s\n", message);
+        std::fflush(stdout);
     }
 }
 
 void hal_log_value(const char* message, float value) {
     if (message != nullptr) {
         std::printf("%s: %.4f\n", message, static_cast<double>(value));
+        std::fflush(stdout);
     }
 }
 

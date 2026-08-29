@@ -79,8 +79,8 @@ bool frame_adapter_convert(
     //   2. Check if bilinear interpolation can be replaced with a more
     //      accurate downsampling that preserves sharp edges
     //   3. Consider adding a configurable downsampling mode (bilinear vs NN)
-    const bool exact_half_downscale = false;
-    if (false && std::abs(sx - 2.0f) < 0.001f && std::abs(sy - 2.0f) < 0.001f) {
+    const bool exact_half_downscale = true;
+    if (exact_half_downscale && std::abs(sx - 2.0f) < 0.001f && std::abs(sy - 2.0f) < 0.001f) {
         for (uint16_t ty = 0; ty < dst_h; ++ty) {
             uint8_t* row = dst_rgb888 + static_cast<size_t>(ty) * dst_w * 3;
             const uint16_t sy = ty * 2;
