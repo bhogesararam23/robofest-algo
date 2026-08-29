@@ -101,8 +101,9 @@ CORNER_EPSILON_RATIO = 0.045
 
 
 def analyze(mask, min_area, max_area):
-    kernel = np.ones((3, 3), np.uint8)
+    kernel = np.ones((5, 5), np.uint8)
     clean = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    clean = cv2.morphologyEx(clean, cv2.MORPH_CLOSE, kernel, iterations=1)
     clean = cv2.dilate(clean, kernel, iterations=1)
     contours, _ = cv2.findContours(clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -256,42 +257,81 @@ def process_frame(img, min_area, max_area):
     overlay = img.copy()
     results = []
 
-    # 1. Build masks for all named colors
-    named_masks = {}
+    # Only red and yellow get full color+shape analysis (mine detection).
+    MINE_COLORS = {"red", "yellow"}
+
+    # 1. Build masks for mine colors and the combined obstacle pool
+    mine_masks = {}
+    obstacle_parts = []
     for color_name, bands in COLOR_BANDS.items():
-        named_masks[color_name] = build_mask(hsv, bands)
+        mask = build_mask(hsv, bands)
+        if color_name in MINE_COLORS:
+            mine_masks[color_name] = mask
+        else:
+            obstacle_parts.append(mask)
 
-    # 2. Build generic obstacle mask, then subtract all named color masks
-    obstacle_mask = build_mask(hsv, OBSTACLE_BAND)
-    for mask in named_masks.values():
-        obstacle_mask = cv2.bitwise_and(obstacle_mask, cv2.bitwise_not(mask))
+    # Combined obstacle mask: all non-mine bands bitwise-OR'd together
+    obstacle_mask = obstacle_parts[0]
+    for m in obstacle_parts[1:]:
+        obstacle_mask = cv2.bitwise_or(obstacle_mask, m)
 
-    # 3. Analyze named color masks — reclassify circular red/yellow as mines
-    for color_name, mask in named_masks.items():
+    # Subtract mine masks so red/yellow pixels don't also appear as obstacles
+    for m in mine_masks.values():
+        obstacle_mask = cv2.bitwise_and(obstacle_mask, cv2.bitwise_not(m))
+
+    # 2. Analyze mine color masks — classify shape, relabel circles as mines
+    for color_name, mask in mine_masks.items():
         for d in analyze(mask, min_area, max_area):
             shape = classify_shape(d["corners"], d["aspect"], d["extent"],
                                    d["solidity"], d["circularity"])
-            label = f"{color_name} {shape}"
-            is_mine = False
-
-            if color_name in ("red", "yellow") and shape == "circle":
-                label = f"mine ({color_name})"
-                is_mine = True
-
+            is_mine = (shape == "circle")
+            label = f"mine ({color_name})" if is_mine else f"{color_name} {shape}"
             draw_label(overlay, d, label, color_name, is_mine=is_mine)
             results.append({**d, "color": color_name, "shape": shape,
                             "label": label})
 
-    # 4. Analyze generic obstacle mask
+    # 3. Analyze combined obstacle mask — classify shape, label "obstacle {shape}"
     for d in analyze(obstacle_mask, min_area, max_area):
         shape = classify_shape(d["corners"], d["aspect"], d["extent"],
                                d["solidity"], d["circularity"])
-        label = "obstacle"
+        label = f"obstacle {shape}"
         draw_label(overlay, d, label, "obstacle", is_mine=False)
         results.append({**d, "color": "obstacle", "shape": shape,
                         "label": label})
 
+    results = merge_overlapping_boxes(results)
+
     return overlay, results
+
+
+def merge_overlapping_boxes(dets, iou_threshold=0.3):
+    """Merge detection boxes with IoU above threshold. Keep the larger box."""
+    if not dets:
+        return dets
+    dets = sorted(dets, key=lambda d: d["w"] * d["h"], reverse=True)
+    merged = []
+    used = set()
+    for i, d in enumerate(dets):
+        if i in used:
+            continue
+        box = [d["x"], d["y"], d["x"] + d["w"], d["y"] + d["h"]]
+        for j in range(i + 1, len(dets)):
+            if j in used:
+                continue
+            other = dets[j]
+            obox = [other["x"], other["y"], other["x"] + other["w"], other["y"] + other["h"]]
+            ix1 = max(box[0], obox[0])
+            iy1 = max(box[1], obox[1])
+            ix2 = min(box[2], obox[2])
+            iy2 = min(box[3], obox[3])
+            inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+            area_a = d["w"] * d["h"]
+            area_b = other["w"] * other["h"]
+            union = area_a + area_b - inter
+            if union > 0 and inter / union >= iou_threshold:
+                used.add(j)
+        merged.append(d)
+    return merged
 
 
 def run(image_path, out_path, min_area, max_area):
@@ -355,12 +395,8 @@ def run_camera(camera_source, min_area, max_area, width=640, height=480,
     if not cap.isOpened():
         raise SystemExit(f"Could not open camera source '{camera_source}'")
 
-    # Flicker-filter persistence tracks: each entry is
-    # [cx, cy, label, frames_seen, frames_missed]
-    tracks = []
-    MATCH_RADIUS_PX = 40
-    SEEDED_MIN = 3
-    MISSED_MAX = 2
+    # Tracking disabled until single-frame detection is clean.
+    # Re-enable with SEEDED_MIN=3, MISSED_MAX=2 once Problems 1-4 are verified.
 
     print("[CV_UNIVERSAL] Live camera mode - press Q or ESC to quit.")
     fps_avg = 0.0
@@ -378,48 +414,11 @@ def run_camera(camera_source, min_area, max_area, width=640, height=480,
 
         overlay, results = process_frame(work, min_area, max_area)
 
-        # --- Flicker filter: match detections to persistent tracks ---
-        matched_det = set()
-        for tr in tracks:
-            best_j = -1
-            best_dist = MATCH_RADIUS_PX
-            for j, det in enumerate(results):
-                if j in matched_det:
-                    continue
-                dist = math.hypot(det["cx"] - tr[0], det["cy"] - tr[1])
-                if dist < best_dist:
-                    best_dist = dist
-                    best_j = j
-            if best_j >= 0:
-                tr[0] = results[best_j]["cx"]
-                tr[1] = results[best_j]["cy"]
-                tr[2] = results[best_j]["label"]
-                tr[3] += 1  # frames_seen
-                tr[4] = 0   # reset frames_missed
-                matched_det.add(best_j)
-            else:
-                tr[4] += 1  # frames_missed
-
-        # Start new tracks for unmatched detections
-        for j, det in enumerate(results):
-            if j not in matched_det:
-                tracks.append([det["cx"], det["cy"], det["label"], 1, 0])
-
-        # Prune dead tracks and draw only seeded ones
-        tracks = [tr for tr in tracks if tr[4] < MISSED_MAX]
-        for tr in tracks:
-            if tr[3] >= SEEDED_MIN:
-                pos = (tr[0] - 30, max(15, tr[1] - 10))
-                cv2.putText(overlay, tr[2], pos,
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                            (0, 255, 255), 2, cv2.LINE_AA)
-
         dt_ms = (time.time() - t_start) * 1000.0
         fps_curr = 1000.0 / dt_ms if dt_ms > 0 else 0.0
         fps_avg = 0.9 * fps_avg + 0.1 * fps_curr if fps_avg > 0 else fps_curr
 
-        hud = f"objects: {len(results)} | tracks: {len([t for t in tracks if t[3] >= SEEDED_MIN])}" \
-              f" | norm {'ON' if normalize else 'OFF'} " \
+        hud = f"objects: {len(results)} | norm {'ON' if normalize else 'OFF'} " \
               f"(gain {gain:.2f}) | FPS {fps_avg:.1f}"
         cv2.putText(overlay, hud, (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
                     (0, 255, 255), 2, cv2.LINE_AA)
@@ -526,7 +525,9 @@ def selftest(verbose=True):
     for gi, gt in enumerate(ground_truth):
         best_j = -1
         best_dist = _SELFTEST_MATCH_TOLERANCE_PX
-        expected_label = f"{gt['color']} {gt['shape']}"
+        expected_label = (f"{gt['color']} {gt['shape']}"
+                          if gt['color'] in ('red', 'yellow')
+                          else f"obstacle {gt['shape']}")
 
         for j, det in enumerate(results):
             if j in matched_det:
@@ -594,7 +595,7 @@ def main():
                     help="Run the synthetic ground-truth validation and exit.")
     ap.add_argument("--out", default="universal_result.png",
                     help="Output path (--image mode only).")
-    ap.add_argument("--min-area", type=float, default=200)
+    ap.add_argument("--min-area", type=float, default=600)
     ap.add_argument("--max-area", type=float, default=500000)
     ap.add_argument("--width", type=int, default=640,
                     help="Camera capture width (--camera mode only).")
