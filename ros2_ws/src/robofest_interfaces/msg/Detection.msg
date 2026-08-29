@@ -1,0 +1,10 @@
+uint8 id
+string type
+float32 confidence
+float32 pixel_x
+float32 pixel_y
+float32 width_px
+float32 height_px
+bool position_valid
+float32 x
+float32 y
